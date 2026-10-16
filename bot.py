@@ -8,6 +8,14 @@ from pathlib import Path
 
 import discord
 from discord.ext import commands
+import asyncio
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 
 # User ID -> Winning weight
@@ -239,6 +247,82 @@ async def diff(ctx, user1: discord.Member, user2: discord.Member):
         f"**Diff Severity:** {severity}%\n"
         f"**Verdict:** {verdict}"
     )
+
+
+
+
+@bot.command()
+@commands.guild_only()
+async def join(ctx):
+    # Check if user is in a voice channel
+    if not ctx.author.voice or not ctx.author.voice.channel:
+        await ctx.send("Join a VC first 💀")
+        return
+
+    channel = ctx.author.voice.channel
+
+    # Move BaoBot if it's already in another VC
+    if ctx.voice_client:
+        await ctx.voice_client.move_to(channel)
+    else:
+        await channel.connect()
+
+    await ctx.send("")
+
+
+@bot.command()
+@commands.guild_only()
+async def leave(ctx):
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+    else:
+        await ctx.send("I'm not in a VC 💀")
+
+
+
+
+SOUNDS_DIR = Path(__file__).parent / "files" / "sounds"
+
+@bot.command()
+@commands.guild_only()
+@commands.cooldown(1, 15, commands.BucketType.guild)
+async def sound(ctx):
+    if not ctx.author.voice or not ctx.author.voice.channel:
+        await ctx.send("Join a VC first 💀")
+        return
+
+    channel = ctx.author.voice.channel
+    sound_path = SOUNDS_DIR / "bao.mp3"
+
+    if not sound_path.is_file():
+        await ctx.send("Sound file missing!")
+        return
+
+    # Avoid interfering with another playback
+    if ctx.voice_client:
+        await ctx.send("BaoBot is already in a VC!")
+        return
+
+    vc = None
+
+    try:
+        vc = await channel.connect()
+
+        # Play the audio file
+        source = discord.FFmpegPCMAudio(str(sound_path))
+        vc.play(source)
+
+        # Wait for playback to finish
+        while vc.is_playing():
+            await asyncio.sleep(0.2)
+
+    except Exception as e:
+        print(f"Voice error: {e}")
+        await ctx.send("Failed to play the sound.")
+
+    finally:
+        if vc and vc.is_connected():
+            await vc.disconnect()
 
 
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
