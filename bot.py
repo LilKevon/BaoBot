@@ -99,6 +99,27 @@ MAX_HEIGHT = 10
 
 
 
+
+
+@bot.command()
+@commands.cooldown(1, 5, commands.BucketType.user)
+async def triangle(ctx):
+    height = random.randint(3, 8)
+    rows = []
+
+    for i in range(1, height + 1):
+        # Two spaces per missing emoji
+        padding = "  " * (height - i)
+
+        # Separate emojis with spaces
+        row = padding + " ".join([BAO_EMOJI] * i)
+        rows.append(row)
+
+    structure = "\n".join(rows)
+
+    await ctx.send(structure)
+
+
 @bot.command()
 async def stack(ctx):
     height = random.randint(1, MAX_HEIGHT)
