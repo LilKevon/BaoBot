@@ -13,10 +13,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from discord.ext import commands, tasks
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+
 
 load_dotenv()
 
 
+PING_CHANNEL_ID = 1561635601684369459
 
 # User ID -> Winning weight
 USER_WEIGHTS = {
@@ -58,6 +64,9 @@ TRIGGERS = {
 @bot.event
 async def on_ready():
     print(f"BaoBot is online as {bot.user}!")
+
+    if not monitor_ping.is_running():
+        monitor_ping.start()
 
 
 @bot.event
@@ -106,7 +115,10 @@ BAO_EMOJI = "<:sam:1189448163157872720>"
 MAX_HEIGHT = 10
 
 
-
+@bot.command()
+async def ping(ctx):
+    latency = round(bot.latency * 1000)
+    await ctx.send(f"Pong! {latency}ms")
 
 
 @bot.command()
@@ -324,5 +336,82 @@ async def sound(ctx):
             await vc.disconnect()
 
 
-bot.run(os.environ["DISCORD_BOT_TOKEN"])
+
+
+
+ping_message = None
+
+@tasks.loop(seconds=3)
+async def monitor_ping():
+    global ping_message
+
+    channel = bot.get_channel(PING_CHANNEL_ID)
+
+    if channel is None:
+        return
+
+    # Get current time in Eastern Time
+    now = datetime.now(ZoneInfo("America/Toronto"))
+
+    formatted_date = now.strftime("%B %d, %Y")
+    formatted_time = now.strftime("%I:%M:%S %p %Z")
+
+    latency = round(bot.latency * 1000)
+
+    embed = discord.Embed(
+        title="🥟 BaoBot Backend Monitor",
+        color=discord.Color.green(),
+        timestamp=now
+    )
+
+    embed.add_field(
+        name="📡 Gateway Ping",
+        value=f"`{latency} ms`",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🟢 Status",
+        value="Online",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📅 Date",
+        value=formatted_date,
+        inline=False
+    )
+
+    embed.add_field(
+        name="🕒 Time (Eastern)",
+        value=formatted_time,
+        inline=False
+    )
+
+    embed.set_footer(
+        text="BaoBot • Live Backend Monitor"
+    )
+
+    try:
+        if ping_message is None:
+            ping_message = await channel.send(embed=embed)
+        else:
+            await ping_message.edit(embed=embed)
+
+    except discord.NotFound:
+        ping_message = await channel.send(embed=embed)
+
+    except (discord.Forbidden, discord.HTTPException) as e:
+        print(f"Ping monitor error: {e}")
+
+
+@monitor_ping.before_loop
+async def before_monitor_ping():
+    await bot.wait_until_ready()
+
+async def main():
+    async with bot:
+        # await bot.load_extension("cogs.gacha")
+        await bot.load_extension("cogs.monitoring")
+        await bot.start(os.environ["DISCORD_BOT_TOKEN"])
 
