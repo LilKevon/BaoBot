@@ -1,15 +1,19 @@
+
+# Environment files
 .env
 .env.*
+
+# Python
 .venv/
 __pycache__/
 *.pyc
-baobot.db
-baobot-dev.db
-baobot.db
-baobot-dev.db
-baobot.db-journal
-baobot-dev.db-journal
-baobot.db-wal
-baobot.db-shm
-baobot-dev.db-wal
-baobot-dev.db-shm
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Monitoring state
+dashboard-*.json
+dashboard-*.tmp

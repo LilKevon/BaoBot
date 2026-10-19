@@ -13,12 +13,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from discord.ext import commands, tasks
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+
 
 load_dotenv()
 
 
 ANNOUNCEMENT_CHANNEL_ID = 1561644432640442379
-
 
 BACK_ONLINE_IMAGE = (
     Path(__file__).resolve().parent
@@ -26,7 +30,6 @@ BACK_ONLINE_IMAGE = (
     / "pictures"
     / "back_online_bao.jpg"
 )
-
 
 # User ID -> Winning weight
 USER_WEIGHTS = {
@@ -66,26 +69,31 @@ TRIGGERS = {
 }
 
 
+
 @bot.event
 async def on_ready():
     print(f"BaoBot is online as {bot.user}!")
 
+    # Don't announce development bot restarts
+    if os.getenv("BOT_ENV") == "development":
+        return
+
     # Prevent duplicate announcements on reconnects
     if getattr(bot, "startup_announced", False):
         return
-
-    channel = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
-
-    if channel is None:
-        channel = await bot.fetch_channel(
-            ANNOUNCEMENT_CHANNEL_ID
-        )
 
     if not BACK_ONLINE_IMAGE.is_file():
         print("Back-online image not found!")
         return
 
     try:
+        channel = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+
+        if channel is None:
+            channel = await bot.fetch_channel(
+                ANNOUNCEMENT_CHANNEL_ID
+            )
+
         await channel.send(
             content="🥟 **Back online.**",
             file=discord.File(BACK_ONLINE_IMAGE)
@@ -95,7 +103,6 @@ async def on_ready():
 
     except (discord.Forbidden, discord.HTTPException) as e:
         print(f"Failed to send startup announcement: {e}")
-
 
 
 @bot.event
@@ -144,7 +151,10 @@ BAO_EMOJI = "<:sam:1189448163157872720>"
 MAX_HEIGHT = 10
 
 
-
+@bot.command()
+async def ping(ctx):
+    latency = round(bot.latency * 1000)
+    await ctx.send(f"Pong! {latency}ms")
 
 
 @bot.command()
@@ -362,5 +372,13 @@ async def sound(ctx):
             await vc.disconnect()
 
 
+
+
+async def main():
+    async with bot:
+        # await bot.load_extension("cogs.gacha")
+        await bot.load_extension("cogs.monitoring")
+        await bot.start(os.environ["DISCORD_BOT_TOKEN"])
+
 if __name__ == "__main__":
-    bot.run(os.environ["DISCORD_BOT_TOKEN"])
+    asyncio.run(main())
