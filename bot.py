@@ -17,6 +17,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+ANNOUNCEMENT_CHANNEL_ID = 1561644432640442379
+
+
+BACK_ONLINE_IMAGE = (
+    Path(__file__).resolve().parent
+    / "files"
+    / "pictures"
+    / "back_online_bao.jpg"
+)
+
 
 # User ID -> Winning weight
 USER_WEIGHTS = {
@@ -55,9 +65,37 @@ TRIGGERS = {
     "BBB": "ButtBoyBao"
 }
 
+
 @bot.event
 async def on_ready():
     print(f"BaoBot is online as {bot.user}!")
+
+    # Prevent duplicate announcements on reconnects
+    if getattr(bot, "startup_announced", False):
+        return
+
+    channel = bot.get_channel(ANNOUNCEMENT_CHANNEL_ID)
+
+    if channel is None:
+        channel = await bot.fetch_channel(
+            ANNOUNCEMENT_CHANNEL_ID
+        )
+
+    if not BACK_ONLINE_IMAGE.is_file():
+        print("Back-online image not found!")
+        return
+
+    try:
+        await channel.send(
+            content="🥟 **Back online.**",
+            file=discord.File(BACK_ONLINE_IMAGE)
+        )
+
+        bot.startup_announced = True
+
+    except (discord.Forbidden, discord.HTTPException) as e:
+        print(f"Failed to send startup announcement: {e}")
+
 
 
 @bot.event
@@ -324,5 +362,5 @@ async def sound(ctx):
             await vc.disconnect()
 
 
-bot.run(os.environ["DISCORD_BOT_TOKEN"])
-
+if __name__ == "__main__":
+    bot.run(os.environ["DISCORD_BOT_TOKEN"])
