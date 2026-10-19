@@ -1,5 +1,15 @@
 .env
+.env.*
 .venv/
 __pycache__/
 *.pyc
 baobot.db
+baobot-dev.db
+baobot.db
+baobot-dev.db
+baobot.db-journal
+baobot-dev.db-journal
+baobot.db-wal
+baobot.db-shm
+baobot-dev.db-wal
+baobot-dev.db-shm

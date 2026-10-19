@@ -1,0 +1,48 @@
+
+[
+  {
+    "id": "demonic_bao",
+    "name": "Demonic Bao",
+    "image": "files/cards/demonic_bao.jpg",
+    "description": "Whats wrong? scared?"
+  },
+
+  {
+    "id": "gojover_bao",
+    "name": "Gojover Bao",
+    "image": "files/cards/gojover_bao.jpg",
+    "description": "Judas, baby."
+  },
+  {
+    "id": "gym_bao",
+    "name": "Gym Bao",
+    "image": "files/cards/gym_bao.jpg",
+    "description": "Has bro ever lifted a weight other then a cheeseburger?"
+  },
+  {
+    "id": "nerdy_bao",
+    "name": "Nerdy Bao",
+    "image": "files/cards/nerdy_bao.png",
+    "description": "Erm, shen acshually takes lots of skill guys!"
+  },
+
+  {
+    "id": "rizz_bao",
+    "name": "Rizz Bao",
+    "image": "files/cards/rizz_bao.png",
+    "description": "..."
+  },
+
+  {
+    "id": "sad_bao",
+    "name": "Sad Bao",
+    "image": "files/cards/sad_bao.png",
+    "description": "why is bro pouting?"
+  }
+
+
+
+
+
+]
+
