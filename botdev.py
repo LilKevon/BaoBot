@@ -17,6 +17,7 @@ async def main():
 
     async with bot:
         await bot.load_extension("cogs.gacha")
+        await bot.load_extension("cogs.monitoring")
         await bot.start(os.environ["DISCORD_BOT_TOKEN"])
 
 
