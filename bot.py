@@ -38,7 +38,7 @@ REPLY_CHANCE = 0.05
 RANDOM_RESPONSES = [
     "Nobody asked.",
     "Interesting opinion. Unfortunately, bao.",
-    "Bro is NOT cooking 💀",
+    "Bro is NOT cooking",
     "I'm watching you.",
     "That's crazy.",
     "Skill issue.",
@@ -256,12 +256,11 @@ async def diff(ctx, user1: discord.Member, user2: discord.Member):
 async def join(ctx):
     # Check if user is in a voice channel
     if not ctx.author.voice or not ctx.author.voice.channel:
-        await ctx.send("Join a VC first 💀")
+        await ctx.send("Join a VC first")
         return
 
     channel = ctx.author.voice.channel
 
-    # Move BaoBot if it's already in another VC
     if ctx.voice_client:
         await ctx.voice_client.move_to(channel)
     else:
@@ -276,7 +275,7 @@ async def leave(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
     else:
-        await ctx.send("I'm not in a VC 💀")
+        await ctx.send("I'm not in a VC")
 
 
 
