@@ -375,3 +375,52 @@ def get_total_rolls(user_id):
         """, (user_id,)).fetchone()
 
         return row["total_rolls"] if row else 0
+
+
+def get_inventory(user_id):
+    """Return every card instance owned by a player."""
+    with database() as conn:
+        rows = conn.execute("""
+            SELECT
+                instance_id,
+                card_id,
+                rarity,
+                is_shiny,
+                obtained_at
+            FROM player_cards
+            WHERE user_id = ?
+            ORDER BY
+                is_shiny DESC,
+                CASE rarity
+                    WHEN 'peebing_cool' THEN 0
+                    WHEN 'divine' THEN 1
+                    WHEN 'mythical' THEN 2
+                    WHEN 'legendary' THEN 3
+                    WHEN 'epic' THEN 4
+                    WHEN 'rare' THEN 5
+                    WHEN 'uncommon' THEN 6
+                    ELSE 7
+                END,
+                instance_id DESC
+        """, (user_id,)).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+def get_card_instance(user_id, instance_id):
+    """Retrieve one card, verifying its owner."""
+    with database() as conn:
+        row = conn.execute("""
+            SELECT
+                instance_id,
+                card_id,
+                rarity,
+                is_shiny,
+                obtained_at
+            FROM player_cards
+            WHERE user_id = ?
+              AND instance_id = ?
+        """, (user_id, instance_id)).fetchone()
+
+        return dict(row) if row else None
+

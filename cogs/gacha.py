@@ -15,6 +15,15 @@ from database import (
     get_total_rolls
 )
 
+from database import get_inventory, get_card_instance
+
+from cogs.inventory import (
+    InventoryView,
+    build_card_display
+)
+
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 CARDS_FILE = BASE_DIR / "data" / "cards.json"
 
@@ -148,7 +157,7 @@ class Gacha(commands.Cog):
         await ctx.send(file=image, embed=embed)
 
     
-    @commands.command(name="collection", aliases=["cards"])
+    # @commands.command(name="collection", aliases=["cards"])
     @commands.guild_only()
     async def collection(self, ctx):
         collection = await asyncio.to_thread(
@@ -445,6 +454,82 @@ class Gacha(commands.Cog):
             f"**{name}** ({rarity})\n"
             f"Earned **{result['value']:,} BaoCoins**!"
         )
+
+
+        
+    
+    @commands.command(name="inventory", aliases=["inv"])
+    @commands.guild_only()
+    async def inventory(self, ctx):
+        instances = await asyncio.to_thread(
+            get_inventory,
+            ctx.author.id
+        )
+
+        total_rolls = await asyncio.to_thread(
+            get_total_rolls,
+            ctx.author.id
+        )
+
+        if not instances:
+            await ctx.send(
+                "🥟 Your inventory is empty! "
+                "Use `!roll` to collect cards."
+            )
+            return
+
+        view = InventoryView(
+            owner_id=ctx.author.id,
+            instances=instances,
+            card_lookup=self.card_lookup,
+            base_dir=BASE_DIR,
+            total_rolls=total_rolls
+        )
+
+        embed, image = view.current_display()
+
+        if image:
+            message = await ctx.send(
+                embed=embed,
+                file=image,
+                view=view
+            )
+        else:
+            message = await ctx.send(
+                embed=embed,
+                view=view
+            )
+
+        view.message = message
+
+
+
+    @commands.command(name="inspect")
+    @commands.guild_only()
+    async def inspect(self, ctx, instance_id: int):
+        instance = await asyncio.to_thread(
+            get_card_instance,
+            ctx.author.id,
+            instance_id
+        )
+
+        if instance is None:
+            await ctx.send(
+                "❌ Card not found, or you don't own it."
+            )
+            return
+
+        embed, image = build_card_display(
+            instance,
+            self.card_lookup,
+            BASE_DIR
+        )
+
+        if image:
+            await ctx.send(embed=embed, file=image)
+        else:
+            await ctx.send(embed=embed)
+
 
 
 
