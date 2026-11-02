@@ -28,16 +28,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CARDS_FILE = BASE_DIR / "data" / "cards.json"
 
 
-
-RARITY_WEIGHTS = {
-    "common": 64889,
-    "uncommon": 20000,
-    "rare": 10000,
-    "epic": 4000,
-    "legendary": 1000,
-    "mythical": 100,
-    "divine": 10,
-    "peebing_cool": 1
+RARITY_WEIGHTS = { 
+    "common": 45000,       # Reduced from ~65% to 45%
+    "uncommon": 25000,     # Increased to give a steady stream of green drops
+    "rare": 15000,         # Boosted for more frequent "good" drops
+    "epic": 8000,          # Doubled the chance for major milestones
+    "legendary": 5000,     # Quintupled (5x) to make them attainable
+    "mythical": 1500,      # Boosted 15x so players actually see them
+    "divine": 450,         # Boosted 45x to turn "impossible" into "chasing a jackpot"
+    "peebing_cool": 50     # Boosted 50x so the ultimate tier is a rare myth rather than a mathematical miracle
 }
 
 RARITY_COLORS = {
