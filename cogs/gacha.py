@@ -3,6 +3,7 @@ import asyncio
 import json
 import random
 from pathlib import Path
+from database import get_pity, PITY_THRESHOLDS
 
 import discord
 from discord.ext import commands
@@ -68,55 +69,81 @@ class Gacha(commands.Cog):
         }
 
     
-    def roll_card(self):
-        # Select any Bao picture
+
+    def roll_card(self, minimum_rarity=None):
         card = random.choice(self.cards)
 
-        # Independently select rarity
         rarity = random.choices(
             population=list(RARITY_WEIGHTS.keys()),
             weights=list(RARITY_WEIGHTS.values()),
             k=1
         )[0]
 
-        # Independently determine shiny status
-        is_shiny = random.random() < SHINY_CHANCE
+        # Upgrade the result only if pity requires it.
+        if minimum_rarity is not None:
+            rarity_order = list(RARITY_WEIGHTS)
 
-        return card, rarity, is_shiny
+            rolled_rank = rarity_order.index(rarity)
+            minimum_rank = rarity_order.index(
+                minimum_rarity
+            )
+
+            if rolled_rank < minimum_rank:
+                rarity = minimum_rarity
+
+        shiny = random.random() < SHINY_CHANCE
+
+        return card, rarity, shiny
+
 
 
     @commands.command(name="roll")
     @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def roll(self, ctx):
-        card, rarity, shiny = self.roll_card()
+        def generate_roll(guarantee):
+            card, rarity, shiny = self.roll_card(
+                  minimum_rarity=guarantee
+            )
 
-        image_path = BASE_DIR / card["image"]
+            # Check artwork before committing the roll
+            image_path = BASE_DIR / card["image"]
 
-        if not image_path.is_file():
-            await ctx.send("Card image not found!")
+            if not image_path.is_file():
+                raise FileNotFoundError(
+                    f"Missing card image: {image_path}"
+                )
+
+            return card, rarity, shiny
+
+        try:
+            result = await asyncio.to_thread(
+                perform_roll,
+                ctx.author.id,
+                generate_roll
+            )
+        except FileNotFoundError as exc:
+            print(f"Gacha image error: {exc}")
+            await ctx.send(
+                "❌ This card's image is missing. "
+                "Your roll was not consumed."
+            )
             return
-
-        
-        result = await asyncio.to_thread(
-            perform_roll,
-            ctx.author.id,
-            card["id"],
-            rarity,
-            shiny
-        )
 
         if result is None:
             await ctx.send(
                 "🥟 You're out of rolls!\n"
-                "Wait for your free rolls to regenerate, "
-                "or use `!buyroll` to purchase more.\n"
-                "Check `!balance` for your next free roll."
+                "Use `!balance` to check regeneration, "
+                "or `!buyroll` for extra rolls."
             )
             return
 
+        card = result["card"]
+        rarity = result["rarity"]
+        shiny = result["shiny"]
         instance_id = result["instance_id"]
 
+        image_path = BASE_DIR / card["image"]
 
 
         title = (
@@ -152,6 +179,16 @@ class Gacha(commands.Cog):
         embed.set_image(
             url=f"attachment://{image_path.name}"
         )
+        if result["guarantee"] is not None:
+            embed.add_field(
+                name="🎯 Pity Guarantee",
+                value=(
+                    result["guarantee"]
+                    .replace("_", " ")
+                    .title() + "+"
+                ),
+                inline=False
+            )
 
         await ctx.send(file=image, embed=embed)
 
@@ -529,6 +566,69 @@ class Gacha(commands.Cog):
         else:
             await ctx.send(embed=embed)
 
+
+
+    @commands.command(name="pity")
+    @commands.guild_only()
+    async def pity(self, ctx):
+        counters = await asyncio.to_thread(
+            get_pity,
+            ctx.author.id
+        )
+
+        embed = discord.Embed(
+            title="🥟 BaoBot Pity Progress",
+            description=(
+                f"**{ctx.author.display_name}'s "
+                "rarity guarantees**"
+            ),
+            color=discord.Color.purple()
+        )
+
+        icons = {
+            "rare": "🔵",
+            "epic": "🟣",
+            "legendary": "🟡",
+            "mythical": "🔴"
+        }
+
+        for tier, threshold in PITY_THRESHOLDS.items():
+            progress = counters[tier]
+            remaining = max(0, threshold - progress)
+
+            filled = min(
+                10,
+                int(progress / threshold * 10)
+            )
+
+            bar = (
+                "🟩" * filled
+                + "⬛" * (10 - filled)
+            )
+
+            embed.add_field(
+                name=(
+                    f"{icons[tier]} "
+                    f"{tier.title()}+"
+                ),
+                value=(
+                    f"{bar}\n"
+                    f"**{progress:,}/{threshold:,}** "
+                    f"unsuccessful pulls\n"
+                    f"Guaranteed within "
+                    f"**{remaining:,}** rolls"
+                ),
+                inline=False
+            )
+
+        embed.set_footer(
+            text=(
+                "Higher rarities reset lower pity tiers. "
+                "Divine and Peebing Cool have no pity."
+            )
+        )
+
+        await ctx.send(embed=embed)
 
 
 

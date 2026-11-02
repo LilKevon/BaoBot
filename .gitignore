@@ -17,3 +17,7 @@ __pycache__/
 # Monitoring state
 dashboard-*.json
 dashboard-*.tmp
+
+#tests
+test_gacha.py
+test_pity.py

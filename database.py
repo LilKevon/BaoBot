@@ -31,6 +31,34 @@ PROTECTED_RARITIES = {
 }
 
 
+PITY_THRESHOLDS = {
+    "rare": 15,
+    "epic": 50,
+    "legendary": 150,
+    "mythical": 1500
+}
+
+RARITY_ORDER = [
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "legendary",
+    "mythical",
+    "divine",
+    "peebing_cool"
+]
+
+PITY_COLUMNS = {
+    "rare": "rare_pity",
+    "epic": "epic_pity",
+    "legendary": "legendary_pity",
+    "mythical": "mythical_pity"
+}
+
+
+
+
 @contextmanager
 def database():
     conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -114,6 +142,21 @@ def initialize_database():
             ON player_cards(user_id)
         """)
 
+        
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pity_counters (
+                user_id INTEGER PRIMARY KEY,
+                rare_pity INTEGER NOT NULL DEFAULT 0,
+                epic_pity INTEGER NOT NULL DEFAULT 0,
+                legendary_pity INTEGER NOT NULL DEFAULT 0,
+                mythical_pity INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (user_id)
+                    REFERENCES players(user_id)
+            )
+        """)
+
+
+
 
 def _ensure_player(conn, user_id, now):
     conn.execute("""
@@ -122,6 +165,80 @@ def _ensure_player(conn, user_id, now):
         )
         VALUES (?, ?)
     """, (user_id, now))
+
+    
+def _ensure_pity(conn, user_id):
+    conn.execute("""
+        INSERT OR IGNORE INTO pity_counters (user_id)
+        VALUES (?)
+    """, (user_id,))
+
+
+def _get_pity_counters(conn, user_id):
+    row = conn.execute("""
+        SELECT
+            rare_pity,
+            epic_pity,
+            legendary_pity,
+            mythical_pity
+        FROM pity_counters
+        WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    return {
+        tier: row[column]
+        for tier, column in PITY_COLUMNS.items()
+    }
+
+
+def _get_guarantee(counters):
+    # Highest eligible guarantee takes priority.
+    for tier in reversed(list(PITY_THRESHOLDS)):
+        if counters[tier] >= PITY_THRESHOLDS[tier] - 1:
+            return tier
+
+    return None
+
+
+def _update_pity(conn, user_id, counters, rarity):
+    pulled_rank = RARITY_ORDER.index(rarity)
+
+    for tier in PITY_THRESHOLDS:
+        tier_rank = RARITY_ORDER.index(tier)
+
+        if pulled_rank >= tier_rank:
+            counters[tier] = 0
+        else:
+            counters[tier] += 1
+
+    conn.execute("""
+        UPDATE pity_counters
+        SET rare_pity = ?,
+            epic_pity = ?,
+            legendary_pity = ?,
+            mythical_pity = ?
+        WHERE user_id = ?
+    """, (
+        counters["rare"],
+        counters["epic"],
+        counters["legendary"],
+        counters["mythical"],
+        user_id
+    ))
+
+
+def get_pity(user_id):
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        _ensure_player(conn, user_id, now)
+        _ensure_pity(conn, user_id)
+
+        return _get_pity_counters(conn, user_id)
+
+
 
 
 def _refresh_rolls(conn, user_id, now):
@@ -197,14 +314,16 @@ def get_balance(user_id):
         }
 
 
-def perform_roll(user_id, card_id, rarity, is_shiny):
+
+def perform_roll(user_id, roll_factory):
     now = int(time.time())
 
     with database() as conn:
-        # Lock before checking/spending a roll
         conn.execute("BEGIN IMMEDIATE")
 
         _ensure_player(conn, user_id, now)
+        _ensure_pity(conn, user_id)
+
         free, last = _refresh_rolls(
             conn, user_id, now
         )
@@ -217,6 +336,7 @@ def perform_roll(user_id, card_id, rarity, is_shiny):
 
         paid = player["paid_rolls"]
 
+        # Check availability before generating a card
         if free > 0:
             free -= 1
             payment = "free"
@@ -228,6 +348,29 @@ def perform_roll(user_id, card_id, rarity, is_shiny):
         else:
             return None
 
+        counters = _get_pity_counters(
+            conn, user_id
+        )
+
+        guarantee = _get_guarantee(counters)
+
+        # Let the gacha engine generate a card,
+        # respecting the minimum guaranteed rarity.
+        card, rarity, shiny = roll_factory(guarantee)
+
+        if rarity not in RARITY_ORDER:
+            raise ValueError(
+                f"Unknown rarity: {rarity}"
+            )
+
+        # Update pity using the FINAL rarity
+        _update_pity(
+            conn,
+            user_id,
+            counters,
+            rarity
+        )
+
         conn.execute("""
             UPDATE players
             SET free_rolls = ?,
@@ -238,22 +381,31 @@ def perform_roll(user_id, card_id, rarity, is_shiny):
 
         cursor = conn.execute("""
             INSERT INTO player_cards (
-                user_id, card_id, rarity, is_shiny
+                user_id,
+                card_id,
+                rarity,
+                is_shiny
             )
             VALUES (?, ?, ?, ?)
         """, (
             user_id,
-            card_id,
+            card["id"],
             rarity,
-            int(is_shiny)
+            int(shiny)
         ))
 
         return {
             "instance_id": cursor.lastrowid,
+            "card": card,
+            "rarity": rarity,
+            "shiny": shiny,
+            "guarantee": guarantee,
             "payment": payment,
             "free_rolls": free,
-            "paid_rolls": paid
+            "paid_rolls": paid,
+            "pity": counters.copy()
         }
+
 
 
 def buy_rolls(user_id, quantity):
