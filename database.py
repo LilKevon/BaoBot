@@ -1,19 +1,59 @@
 
 import sqlite3
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-
 DB_PATH = BASE_DIR / "baobot-dev.db"
 
+MAX_FREE_ROLLS = 5
+REGEN_SECONDS = 60
+ROLL_PRICE = 100
+SHINY_MULTIPLIER = 5
+
+SELL_VALUES = {
+    "common": 10,
+    "uncommon": 20,
+    "rare": 40,
+    "epic": 100,
+    "legendary": 500,
+    "mythical": 2000,
+    "divine": 10000,
+    "peebing_cool": 100000
+}
+
+PROTECTED_RARITIES = {
+    "legendary",
+    "mythical",
+    "divine",
+    "peebing_cool"
+}
+
+
+@contextmanager
+def database():
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
 
 
 def initialize_database():
-    with sqlite3.connect(DB_PATH) as conn:
+    with database() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS players (
                 user_id INTEGER PRIMARY KEY,
-                total_rolls INTEGER NOT NULL DEFAULT 0
+                total_rolls INTEGER NOT NULL DEFAULT 0,
+                bao_coins INTEGER NOT NULL DEFAULT 0,
+                free_rolls INTEGER NOT NULL DEFAULT 5,
+                paid_rolls INTEGER NOT NULL DEFAULT 0,
+                last_regen_at INTEGER NOT NULL DEFAULT 0
             )
         """)
 
@@ -32,18 +72,41 @@ def initialize_database():
             )
         """)
 
-        # Migrate existing databases
-        columns = {
-            row[1]
+        # Migrate existing player databases
+        player_columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(players)"
+            )
+        }
+
+        new_columns = {
+            "bao_coins": "INTEGER NOT NULL DEFAULT 0",
+            "free_rolls": "INTEGER NOT NULL DEFAULT 5",
+            "paid_rolls": "INTEGER NOT NULL DEFAULT 0",
+            "last_regen_at": "INTEGER NOT NULL DEFAULT 0"
+        }
+
+        for column, definition in new_columns.items():
+            if column not in player_columns:
+                conn.execute(
+                    f"ALTER TABLE players "
+                    f"ADD COLUMN {column} {definition}"
+                )
+
+        # Preserve compatibility with older card databases
+        card_columns = {
+            row["name"]
             for row in conn.execute(
                 "PRAGMA table_info(player_cards)"
             )
         }
 
-        if "rarity" not in columns:
+        if "rarity" not in card_columns:
             conn.execute("""
                 ALTER TABLE player_cards
-                ADD COLUMN rarity TEXT NOT NULL DEFAULT 'common'
+                ADD COLUMN rarity TEXT NOT NULL
+                DEFAULT 'common'
             """)
 
         conn.execute("""
@@ -52,70 +115,263 @@ def initialize_database():
         """)
 
 
+def _ensure_player(conn, user_id, now):
+    conn.execute("""
+        INSERT OR IGNORE INTO players (
+            user_id, last_regen_at
+        )
+        VALUES (?, ?)
+    """, (user_id, now))
 
 
-def save_pull(user_id, card_id, rarity, is_shiny):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO players (user_id)
-            VALUES (?)
-            """,
-            (user_id,)
+def _refresh_rolls(conn, user_id, now):
+    player = conn.execute("""
+        SELECT free_rolls, last_regen_at
+        FROM players
+        WHERE user_id = ?
+    """, (user_id,)).fetchone()
+
+    free = player["free_rolls"]
+    last = player["last_regen_at"]
+
+    # Initialize timer for users from an older database
+    if last == 0:
+        last = now
+
+    if free >= MAX_FREE_ROLLS:
+        free = MAX_FREE_ROLLS
+        last = now
+    else:
+        elapsed = max(0, now - last)
+        restored = elapsed // REGEN_SECONDS
+
+        if restored > 0:
+            free = min(
+                MAX_FREE_ROLLS,
+                free + restored
+            )
+
+            if free == MAX_FREE_ROLLS:
+                last = now
+            else:
+                last += restored * REGEN_SECONDS
+
+    conn.execute("""
+        UPDATE players
+        SET free_rolls = ?,
+            last_regen_at = ?
+        WHERE user_id = ?
+    """, (free, last, user_id))
+
+    return free, last
+
+
+def get_balance(user_id):
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _ensure_player(conn, user_id, now)
+        free, last = _refresh_rolls(
+            conn, user_id, now
         )
 
-        cursor = conn.execute(
-    """
-    INSERT INTO player_cards
-        (user_id, card_id, rarity, is_shiny)
-    VALUES (?, ?, ?, ?)
-    """,
-    (user_id, card_id, rarity, int(is_shiny))
-)
-
-        conn.execute(
-            """
-            UPDATE players
-            SET total_rolls = total_rolls + 1
+        player = conn.execute("""
+            SELECT bao_coins, paid_rolls, total_rolls
+            FROM players
             WHERE user_id = ?
-            """,
-            (user_id,)
+        """, (user_id,)).fetchone()
+
+        next_roll = (
+            max(1, REGEN_SECONDS - (now - last))
+            if free < MAX_FREE_ROLLS
+            else 0
         )
 
-        return cursor.lastrowid
+        return {
+            "coins": player["bao_coins"],
+            "free_rolls": free,
+            "paid_rolls": player["paid_rolls"],
+            "total_rolls": player["total_rolls"],
+            "next_roll": next_roll
+        }
+
+
+def perform_roll(user_id, card_id, rarity, is_shiny):
+    now = int(time.time())
+
+    with database() as conn:
+        # Lock before checking/spending a roll
+        conn.execute("BEGIN IMMEDIATE")
+
+        _ensure_player(conn, user_id, now)
+        free, last = _refresh_rolls(
+            conn, user_id, now
+        )
+
+        player = conn.execute("""
+            SELECT paid_rolls
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        paid = player["paid_rolls"]
+
+        if free > 0:
+            free -= 1
+            payment = "free"
+
+        elif paid > 0:
+            paid -= 1
+            payment = "purchased"
+
+        else:
+            return None
+
+        conn.execute("""
+            UPDATE players
+            SET free_rolls = ?,
+                paid_rolls = ?,
+                total_rolls = total_rolls + 1
+            WHERE user_id = ?
+        """, (free, paid, user_id))
+
+        cursor = conn.execute("""
+            INSERT INTO player_cards (
+                user_id, card_id, rarity, is_shiny
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            user_id,
+            card_id,
+            rarity,
+            int(is_shiny)
+        ))
+
+        return {
+            "instance_id": cursor.lastrowid,
+            "payment": payment,
+            "free_rolls": free,
+            "paid_rolls": paid
+        }
+
+
+def buy_rolls(user_id, quantity):
+    if not 1 <= quantity <= 100:
+        return {"status": "invalid_quantity"}
+
+    cost = quantity * ROLL_PRICE
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _ensure_player(conn, user_id, now)
+
+        player = conn.execute("""
+            SELECT bao_coins
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        if player["bao_coins"] < cost:
+            return {
+                "status": "insufficient",
+                "cost": cost,
+                "coins": player["bao_coins"]
+            }
+
+        conn.execute("""
+            UPDATE players
+            SET bao_coins = bao_coins - ?,
+                paid_rolls = paid_rolls + ?
+            WHERE user_id = ?
+        """, (cost, quantity, user_id))
+
+        return {
+            "status": "success",
+            "cost": cost,
+            "quantity": quantity
+        }
+
+
+def sell_card(user_id, instance_id, confirmed=False):
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        card = conn.execute("""
+            SELECT card_id, rarity, is_shiny
+            FROM player_cards
+            WHERE instance_id = ? AND user_id = ?
+        """, (instance_id, user_id)).fetchone()
+
+        if card is None:
+            return {"status": "not_found"}
+
+        rarity = card["rarity"]
+        shiny = bool(card["is_shiny"])
+
+        if rarity not in SELL_VALUES:
+            return {"status": "unknown_rarity"}
+
+        value = SELL_VALUES[rarity] * (
+            SHINY_MULTIPLIER if shiny else 1
+        )
+
+        valuable = (
+            shiny or rarity in PROTECTED_RARITIES
+        )
+
+        if valuable and not confirmed:
+            return {
+                "status": "confirmation_required",
+                "value": value,
+                "rarity": rarity,
+                "shiny": shiny
+            }
+
+        conn.execute("""
+            DELETE FROM player_cards
+            WHERE instance_id = ? AND user_id = ?
+        """, (instance_id, user_id))
+
+        conn.execute("""
+            UPDATE players
+            SET bao_coins = bao_coins + ?
+            WHERE user_id = ?
+        """, (value, user_id))
+
+        return {
+            "status": "success",
+            "card_id": card["card_id"],
+            "rarity": rarity,
+            "shiny": shiny,
+            "value": value
+        }
 
 
 def get_collection(user_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-
-        rows = conn.execute(
-            """
+    with database() as conn:
+        rows = conn.execute("""
             SELECT
-    card_id,
-    rarity,
-    is_shiny,
-    COUNT(*) AS quantity
-FROM player_cards
-WHERE user_id = ?
-GROUP BY card_id, rarity, is_shiny
-ORDER BY card_id, rarity, is_shiny
-            """,
-            (user_id,)
-        ).fetchall()
+                card_id,
+                rarity,
+                is_shiny,
+                COUNT(*) AS quantity
+            FROM player_cards
+            WHERE user_id = ?
+            GROUP BY card_id, rarity, is_shiny
+            ORDER BY card_id, rarity, is_shiny
+        """, (user_id,)).fetchall()
 
         return [dict(row) for row in rows]
 
 
 def get_total_rolls(user_id):
-    with sqlite3.connect(DB_PATH) as conn:
-        result = conn.execute(
-            """
+    with database() as conn:
+        row = conn.execute("""
             SELECT total_rolls
             FROM players
             WHERE user_id = ?
-            """,
-            (user_id,)
-        ).fetchone()
+        """, (user_id,)).fetchone()
 
-        return result[0] if result else 0
+        return row["total_rolls"] if row else 0

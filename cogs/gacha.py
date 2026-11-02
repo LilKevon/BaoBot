@@ -6,8 +6,14 @@ from pathlib import Path
 
 import discord
 from discord.ext import commands
-
-from database import save_pull, get_collection, get_total_rolls
+from database import (
+    perform_roll,
+    get_balance,
+    buy_rolls,
+    sell_card,
+    get_collection,
+    get_total_rolls
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CARDS_FILE = BASE_DIR / "data" / "cards.json"
@@ -83,14 +89,26 @@ class Gacha(commands.Cog):
             await ctx.send("Card image not found!")
             return
 
-        # Save this pull to SQLite
-        instance_id = await asyncio.to_thread(
-    save_pull,
-    ctx.author.id,
-    card["id"],
-    rarity,
-    shiny
-)
+        
+        result = await asyncio.to_thread(
+            perform_roll,
+            ctx.author.id,
+            card["id"],
+            rarity,
+            shiny
+        )
+
+        if result is None:
+            await ctx.send(
+                "🥟 You're out of rolls!\n"
+                "Wait for your free rolls to regenerate, "
+                "or use `!buyroll` to purchase more.\n"
+                "Check `!balance` for your next free roll."
+            )
+            return
+
+        instance_id = result["instance_id"]
+
 
 
         title = (
@@ -164,6 +182,7 @@ class Gacha(commands.Cog):
     (entry["card_id"], entry["rarity"])
     for entry in collection
 })
+        
 
 
         rarity_icons = {
@@ -268,6 +287,165 @@ class Gacha(commands.Cog):
         )
 
         await ctx.send(embed=embed)
+
+
+
+
+    @commands.command(name="balance", aliases=["bal"])
+    @commands.guild_only()
+    async def bal(self, ctx):
+        account = await asyncio.to_thread(
+            get_balance,
+            ctx.author.id
+        )
+
+        embed = discord.Embed(
+            title="🥟 BaoBot Wallet",
+            description=(
+                f"**{ctx.author.display_name}'s economy**"
+            ),
+            color=discord.Color.gold()
+        )
+
+        embed.set_thumbnail(
+            url=ctx.author.display_avatar.url
+        )
+
+        embed.add_field(
+            name="🪙 BaoCoins",
+            value=f"**{account['coins']:,} BC**",
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎟️ Free Rolls",
+            value=f"**{account['free_rolls']}/5**",
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎫 Purchased Rolls",
+            value=f"**{account['paid_rolls']}**",
+            inline=True
+        )
+
+        if account["free_rolls"] == 5:
+            regen = "Free rolls are full!"
+        else:
+            seconds = account["next_roll"]
+            regen = f"Next free roll in **{seconds}s**"
+
+        embed.add_field(
+            name="⏳ Regeneration",
+            value=regen,
+            inline=False
+        )
+
+        embed.add_field(
+            name="🎲 Lifetime Rolls",
+            value=f"{account['total_rolls']:,}",
+            inline=False
+        )
+
+        embed.set_footer(
+            text="1 free roll/min • Extra rolls cost 100 BC"
+        )
+
+        await ctx.send(embed=embed)
+
+    @commands.command(name="buyroll")
+    @commands.guild_only()
+    async def buyroll(self, ctx, quantity: int = 1):
+        result = await asyncio.to_thread(
+            buy_rolls,
+            ctx.author.id,
+            quantity
+        )
+
+        if result["status"] == "invalid_quantity":
+            await ctx.send(
+                "You can buy between 1 and 100 rolls at once."
+            )
+            return
+
+        if result["status"] == "insufficient":
+            await ctx.send(
+                f"❌ Not enough BaoCoins!\n"
+                f"Cost: **{result['cost']:,} BC**\n"
+                f"Balance: **{result['coins']:,} BC**"
+            )
+            return
+
+        await ctx.send(
+            f"✅ Purchased **{quantity} roll(s)** "
+            f"for **{result['cost']:,} BC**!\n"
+            f"Use `!balance` to check your rolls."
+        )
+
+    @commands.command(name="sell")
+    @commands.guild_only()
+    async def sell(
+        self,
+        ctx,
+        instance_id: int,
+        confirmation: str = ""
+    ):
+        confirmed = confirmation.lower() == "confirm"
+
+        result = await asyncio.to_thread(
+            sell_card,
+            ctx.author.id,
+            instance_id,
+            confirmed
+        )
+
+        status = result["status"]
+
+        if status == "not_found":
+            await ctx.send(
+                "❌ You don't own a card with that instance ID."
+            )
+            return
+
+        if status == "unknown_rarity":
+            await ctx.send(
+                "❌ This card has an unrecognized rarity."
+            )
+            return
+
+        if status == "confirmation_required":
+            rarity = result["rarity"].replace(
+                "_", " "
+            ).title()
+
+            await ctx.send(
+                f"⚠️ **Valuable card warning!**\n"
+                f"Card Instance: **#{instance_id}**\n"
+                f"Rarity: **{rarity}**\n"
+                f"Shiny: **{'Yes' if result['shiny'] else 'No'}**\n"
+                f"Sell Value: **{result['value']:,} BC**\n\n"
+                f"To confirm, type:\n"
+                f"`!sell {instance_id} confirm`"
+            )
+            return
+
+        card = self.card_lookup.get(
+            result["card_id"], {}
+        )
+        name = card.get(
+            "name", result["card_id"]
+        )
+
+        rarity = result["rarity"].replace(
+            "_", " "
+        ).title()
+
+        await ctx.send(
+            f"🪙 **Card sold!**\n"
+            f"**{name}** ({rarity})\n"
+            f"Earned **{result['value']:,} BaoCoins**!"
+        )
+
 
 
 
