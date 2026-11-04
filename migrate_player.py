@@ -109,7 +109,7 @@ def migrate_player(user_id):
             print("Cancelled.")
             return
 
-        # Back up production before changing anything.
+        
         timestamp = datetime.now().strftime(
             "%Y%m%d-%H%M%S"
         )
@@ -136,7 +136,7 @@ def migrate_player(user_id):
         try:
             target.execute("BEGIN IMMEDIATE")
 
-            # Replace this player's account details.
+           
             target.execute(f"""
                 INSERT INTO players ({column_sql})
                 VALUES ({placeholders})
@@ -144,13 +144,13 @@ def migrate_player(user_id):
                 {updates}
             """, tuple(player))
 
-            # Remove only this player's old cards.
+            
             target.execute(
                 "DELETE FROM player_cards WHERE user_id = ?",
                 (user_id,)
             )
 
-            # Insert dev cards with new instance IDs.
+            
             target.executemany("""
                 INSERT INTO player_cards (
                     user_id, card_id, rarity,
@@ -168,7 +168,7 @@ def migrate_player(user_id):
                 for card in cards
             ])
 
-            # Replace pity progress.
+           
             target.execute(
                 "DELETE FROM pity_counters WHERE user_id = ?",
                 (user_id,)
