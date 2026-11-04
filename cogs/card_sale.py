@@ -124,7 +124,7 @@ class CardSaleView(discord.ui.View):
                 )
                 return
 
-            # Acknowledge the interaction immediately.
+          
             await interaction.response.defer()
 
             try:
@@ -148,8 +148,7 @@ class CardSaleView(discord.ui.View):
                 self.confirming = False
                 self.update_buttons()
 
-                # Only update the buttons.
-                # Keep the original embed and image untouched.
+
                 await interaction.message.edit(
                     content=None,
                     view=self
@@ -180,7 +179,7 @@ class CardSaleView(discord.ui.View):
             )
 
 
-            # Card may have been sold or traded meanwhile.
+            
             if result["status"] == "not_found":
                 self.closed = True
                 self.confirming = False

@@ -38,6 +38,97 @@
     "name": "Sad Bao",
     "image": "files/cards/sad_bao.png",
     "description": "why is bro pouting?"
+  },
+
+  {
+    "id": "aura_bao",
+    "name": "Aura Bao",
+    "image": "files/cards/aura_bao.png",
+    "description": "Bro is farming aura instead of accomplishments."
+  },
+  {
+    "id": "bao_butt",
+    "name": "Bao Butt",
+    "image": "files/cards/bao_butt.jpg",
+    "description": "The rear end of an era."
+  },
+  {
+    "id": "aren_bao",
+    "name": "Aren Bao",
+    "image": "files/cards/aren_bao.jpg",
+    "description": "Bro entered the arena and immediately lost."
+  },
+  {
+    "id": "kpop_bao",
+    "name": "Kpop Bao",
+    "image": "files/cards/kpop_bao.png",
+    "description": "Your bias could never."
+  },
+  {
+    "id": "horse_bao",
+    "name": "Horse Bao",
+    "image": "files/cards/horse_bao.jpg",
+    "description": "Bro really said neigh."
+  },
+  {
+    "id": "silly_bao",
+    "name": "Silly Bao",
+    "image": "files/cards/silly_bao.jpg",
+    "description": "No thoughts. Just Bao."
+  },
+  {
+    "id": "prime_bao",
+    "name": "Prime Bao",
+    "image": "files/cards/prime_bao.jpg",
+    "description": "They say this was his prime. Nobody remembers."
+  },
+  {
+    "id": "closed_bao",
+    "name": "Closed Bao",
+    "image": "files/cards/closed_bao.jpg",
+    "description": "Closed for business. Permanently."
+  },
+  {
+    "id": "cow_bao",
+    "name": "Cow Bao",
+    "image": "files/cards/cow_bao.jpg",
+    "description": "Moo Bao."
+  },
+  {
+    "id": "palm_tree_bao",
+    "name": "Palm Tree Bao",
+    "image": "files/cards/palm_tree_bao.jpg",
+    "description": "Bro is photosynthesizing."
+  },
+  {
+    "id": "homeless_bao",
+    "name": "Homeless Bao",
+    "image": "files/cards/homeless_bao.jpg",
+    "description": "Lost the house in a gacha pull."
+  },
+  {
+    "id": "young_bao",
+    "name": "Young Bao",
+    "image": "files/cards/young_bao.jpg",
+    "description": "The origin story nobody asked for."
+  },
+  {
+    "id": "low_qual_bao",
+    "name": "Low Quality Bao",
+    "image": "files/cards/low_qual_bao.jpg",
+    "description": "Now available in approximately twelve pixels."
+  },
+  {
+    "id": "chin_bao",
+    "name": "Chin Bao",
+    "image": "files/cards/chin_bao.jpg",
+    "description": "Built different. From the chin up."
+  },
+  {
+    "id": "crazy_bao",
+    "name": "Crazy Bao",
+    "image": "files/cards/crazy_bao.jpg",
+    "description": "The voices are telling him to roll again."
   }
 
 

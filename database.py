@@ -1,13 +1,20 @@
 
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "baobot-dev.db"
+DB_PATH = BASE_DIR / (
+    "baobot-dev.db"
+    if os.getenv("BOT_ENV") == "development"
+    else "baobot.db"
+)
+print(f"🥟 BaoBot database: {DB_PATH}")
 
-MAX_FREE_ROLLS = 5
+
+MAX_FREE_ROLLS = 10
 REGEN_SECONDS = 60
 ROLL_PRICE = 100
 SHINY_MULTIPLIER = 5
@@ -107,7 +114,7 @@ def initialize_database():
             )
         """)
 
-        # Migrate existing player databases
+      
         player_columns = {
             row["name"]
             for row in conn.execute(
@@ -132,7 +139,6 @@ def initialize_database():
                     f"ADD COLUMN {column} {definition}"
                 )
 
-        # Preserve compatibility with older card databases
         card_columns = {
             row["name"]
             for row in conn.execute(
@@ -202,7 +208,7 @@ def _get_pity_counters(conn, user_id):
 
 
 def _get_guarantee(counters):
-    # Highest eligible guarantee takes priority.
+    
     for tier in reversed(list(PITY_THRESHOLDS)):
         if counters[tier] >= PITY_THRESHOLDS[tier] - 1:
             return tier
@@ -261,7 +267,7 @@ def _refresh_rolls(conn, user_id, now):
     free = player["free_rolls"]
     last = player["last_regen_at"]
 
-    # Initialize timer for users from an older database
+
     if last == 0:
         last = now
 
@@ -346,7 +352,7 @@ def perform_roll(user_id, roll_factory):
 
         paid = player["paid_rolls"]
 
-        # Check availability before generating a card
+      
         if free > 0:
             free -= 1
             payment = "free"
@@ -364,8 +370,7 @@ def perform_roll(user_id, roll_factory):
 
         guarantee = _get_guarantee(counters)
 
-        # Let the gacha engine generate a card,
-        # respecting the minimum guaranteed rarity.
+       
         card, rarity, shiny = roll_factory(guarantee)
 
         if rarity not in RARITY_ORDER:
@@ -373,7 +378,7 @@ def perform_roll(user_id, roll_factory):
                 f"Unknown rarity: {rarity}"
             )
 
-        # Update pity using the FINAL rarity
+       
         _update_pity(
             conn,
             user_id,
@@ -456,7 +461,7 @@ def perform_multi_roll(user_id, quantity, roll_factory):
         results = []
 
         for _ in range(quantity):
-            # Pity is checked separately for each pull.
+        
             guarantee = _get_guarantee(counters)
 
             card, rarity, shiny = roll_factory(guarantee)
@@ -469,7 +474,7 @@ def perform_multi_roll(user_id, quantity, roll_factory):
             if "id" not in card:
                 raise ValueError("Card is missing an ID")
 
-            # Update counters for the next pull.
+          
             _update_pity(
                 conn, user_id, counters, rarity
             )
@@ -700,10 +705,9 @@ def execute_multi_sale(
             return {
                 "status": "confirmation_required",
                 **result
-                
+
             }
 
-        # Ensure the confirmation still matches the preview.
         if expected_total is not None:
             if result["total"] != expected_total:
                 return {"status": "sale_changed"}
@@ -861,8 +865,7 @@ def execute_trade(
         return {"status": "same_card"}
 
     with database() as conn:
-        # Prevent other writers from changing ownership
-        # between validation and exchange.
+        
         conn.execute("BEGIN IMMEDIATE")
 
         cards = conn.execute("""

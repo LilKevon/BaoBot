@@ -89,7 +89,7 @@ class Gacha(commands.Cog):
             k=1
         )[0]
 
-        # Upgrade the result only if pity requires it.
+ 
         if minimum_rarity is not None:
             rarity_order = list(RARITY_WEIGHTS)
 
@@ -147,10 +147,10 @@ class Gacha(commands.Cog):
             )
 
         except FileNotFoundError as exc:
-            print(f"Multi-roll image error: {exc}")
+            print(f"❌ Gacha image error: {exc}", flush=True)
             await ctx.send(
-                "❌ A card image is missing. "
-                "No rolls were consumed."
+                f"❌ Missing image: `{exc}`\n"
+                "Your roll was not consumed."
             )
             return
 
@@ -351,7 +351,7 @@ class Gacha(commands.Cog):
             inline=True
         )
 
-        # Protect valuable cards from accidental sales.
+        
         if preview["protected"] and not confirmed:
             ids = " ".join(map(str, instance_ids))
 
@@ -410,7 +410,7 @@ class Gacha(commands.Cog):
                   minimum_rarity=guarantee
             )
 
-            # Check artwork before committing the roll
+           
             image_path = BASE_DIR / card["image"]
 
             if not image_path.is_file():
@@ -529,7 +529,7 @@ class Gacha(commands.Cog):
             )
             return
 
-        # Collection statistics
+       
         total_cards = sum(
             entry["quantity"] for entry in collection
         )
@@ -681,7 +681,7 @@ class Gacha(commands.Cog):
 
         embed.add_field(
             name="🎟️ Free Rolls",
-            value=f"**{account['free_rolls']}/5**",
+            value=f"**{account['free_rolls']}/10**",
             inline=True
         )
 
@@ -691,7 +691,7 @@ class Gacha(commands.Cog):
             inline=True
         )
 
-        if account["free_rolls"] == 5:
+        if account["free_rolls"] == 10:
             regen = "Free rolls are full!"
         else:
             seconds = account["next_roll"]
@@ -811,35 +811,54 @@ class Gacha(commands.Cog):
 
         
     
+    
     @commands.command(name="inventory", aliases=["inv"])
     @commands.guild_only()
-    async def inventory(self, ctx):
+    async def inventory(
+        self,
+        ctx,
+        member: discord.User = None
+    ):
+    
+        target = member or ctx.author
+
         instances = await asyncio.to_thread(
             get_inventory,
-            ctx.author.id
+            target.id
         )
 
         total_rolls = await asyncio.to_thread(
             get_total_rolls,
-            ctx.author.id
+            target.id
         )
 
         if not instances:
             await ctx.send(
-                "🥟 Your inventory is empty! "
-                "Use `!roll` to collect cards."
+                f"🥟 **{discord.utils.escape_markdown(target.display_name)}** "
+                "has no cards in their inventory!"
             )
             return
 
+  
         view = InventoryView(
             owner_id=ctx.author.id,
             instances=instances,
             card_lookup=self.card_lookup,
             base_dir=BASE_DIR,
-            total_rolls=total_rolls
+            total_rolls=total_rolls,
+            inventory_owner_name=target.display_name,
+    read_only=target.id != ctx.author.id
+
         )
 
         embed, image = view.current_display()
+
+        
+        embed.title = (
+            f"🥟 {target.display_name}'s Inventory"
+            if view.showing_overview
+            else embed.title
+        )
 
         if image:
             message = await ctx.send(
@@ -854,6 +873,7 @@ class Gacha(commands.Cog):
             )
 
         view.message = message
+
 
 
 

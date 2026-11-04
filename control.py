@@ -17,7 +17,13 @@ BASE_DIR = Path(__file__).resolve().parent
 CARDS_PATH = BASE_DIR / "data" / "cards.json"
 
 
-ADMIN_USER_ID = 1158232274349850724
+ADMIN_USER_ID = 1560027010347044934
+
+if ADMIN_USER_ID == 1560027010347044934:
+    print("BOT")
+
+elif ADMIN_USER_ID == 1158232274349850724:
+    print("LilKevon")
 
 
 def require_admin_id():

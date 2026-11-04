@@ -7,11 +7,10 @@ import time
 from pathlib import Path
 import difflib
 import logging
-
+import sys
+import asyncio
 
 import discord
-from discord.ext import commands
-import asyncio
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,9 +20,18 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 
+from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
 
+if __name__ == "__main__":
+  
+    load_dotenv(BASE_DIR / ".env", override=True)
+    os.environ["BOT_ENV"] = "production"
+else:
+ 
+    pass
+from database import initialize_database
 
 ANNOUNCEMENT_CHANNEL_ID = 1561644432640442379
 
@@ -34,11 +42,19 @@ BACK_ONLINE_IMAGE = (
     / "back_online_bao.jpg"
 )
 
-# User ID -> Winning weight
+
+
+
+
 USER_WEIGHTS = {
     1158232274349850724: 1000,  
     357642743662772225: 1 
 }
+
+OWNER_IDS = {
+    1158232274349850724  
+}
+
 
 DEFAULT_WEIGHT = 50
 
@@ -77,11 +93,11 @@ TRIGGERS = {
 async def on_ready():
     print(f"BaoBot is online as {bot.user}!")
 
-    # Don't announce development bot restarts
+
     if os.getenv("BOT_ENV") == "development":
         return
 
-    # Prevent duplicate announcements on reconnects
+
     if getattr(bot, "startup_announced", False):
         return
 
@@ -115,7 +131,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Keyword triggers
+
     for trigger, response in TRIGGERS.items():
         if re.search(
             rf"\b{re.escape(trigger)}\b",
@@ -124,7 +140,7 @@ async def on_message(message):
         ):
             await message.channel.send(response)
 
-    # Random responses to target user
+  
     if message.author.id == TARGET_USER_ID:
         current_time = time.monotonic()
 
@@ -167,10 +183,10 @@ async def triangle(ctx):
     rows = []
 
     for i in range(1, height + 1):
-        # Two spaces per missing emoji
+      
         padding = "  " * (height - i)
 
-        # Separate emojis with spaces
+       
         row = padding + " ".join([BAO_EMOJI] * i)
         rows.append(row)
 
@@ -305,7 +321,7 @@ async def diff(ctx, user1: discord.Member, user2: discord.Member):
 @bot.command()
 @commands.guild_only()
 async def join(ctx):
-    # Check if user is in a voice channel
+
     if not ctx.author.voice or not ctx.author.voice.channel:
         await ctx.send("Join a VC first")
         return
@@ -348,7 +364,7 @@ async def sound(ctx):
         await ctx.send("Sound file missing!")
         return
 
-    # Avoid interfering with another playback
+
     if ctx.voice_client:
         await ctx.send("BaoBot is already in a VC!")
         return
@@ -358,11 +374,10 @@ async def sound(ctx):
     try:
         vc = await channel.connect()
 
-        # Play the audio file
         source = discord.FFmpegPCMAudio(str(sound_path))
         vc.play(source)
 
-        # Wait for playback to finish
+     
         while vc.is_playing():
             await asyncio.sleep(0.2)
 
@@ -377,8 +392,7 @@ async def sound(ctx):
 
 @bot.event
 async def on_command_error(ctx, error):
-    # Allow commands with their own handlers to
-    # manage errors without duplicate responses.
+ 
     if ctx.command is not None:
         if ctx.command.has_error_handler():
             return
@@ -392,7 +406,7 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         attempted = ctx.invoked_with or ""
 
-        # Include command aliases in suggestions.
+  
         command_names = {
             name
             for name, command in bot.all_commands.items()
@@ -416,7 +430,7 @@ async def on_command_error(ctx, error):
             )
         else:
             message += (
-                "I might be BBB,"
+                "I might be BBB, "
                 "but you might be the real butt boy.\n"
             )
 
@@ -458,8 +472,7 @@ async def on_command_error(ctx, error):
         )
         return
 
-    # Unexpected errors should still appear in logs
-    # so you can diagnose bugs.
+  
     logging.exception(
         "Unexpected error in command %s",
         ctx.command,
@@ -476,14 +489,49 @@ async def on_command_error(ctx, error):
     )
 
 
+@bot.command(name="restart")
+@commands.guild_only()
+async def restart(ctx):
+    if ctx.author.id not in OWNER_IDS:
+        await ctx.send(
+            "❌ You don't have permission to restart BBB."
+        )
+        return
 
+    await ctx.send("🔄 Restarting BaoBot... 🥟")
+
+  
+    async def perform_restart():
+        await asyncio.sleep(1)
+
+       
+        await bot.close()
+
+        os.execv(
+            sys.executable,
+            [sys.executable, *sys.argv]
+        )
+
+    asyncio.create_task(perform_restart())
+
+@bot.command(name="LilKevon")
+@commands.guild_only()
+async def LilKevon(ctx):
+    await ctx.send("Goated Dev")
 
 
 async def main():
+    initialize_database()
+
     async with bot:
-        # await bot.load_extension("cogs.gacha")
         await bot.load_extension("cogs.monitoring")
+        await bot.load_extension("cogs.gacha")
+        await bot.load_extension("cogs.trading")
+        await bot.load_extension("cogs.help_menu")
+        await bot.load_extension("cogs.rewards")
+
         await bot.start(os.environ["DISCORD_BOT_TOKEN"])
+
 
 if __name__ == "__main__":
     asyncio.run(main())

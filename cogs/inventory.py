@@ -218,7 +218,10 @@ class InventoryView(discord.ui.View):
         instances,
         card_lookup,
         base_dir,
-        total_rolls=0
+        total_rolls=0,
+        inventory_owner_name=None,
+    read_only=False
+        
     ):
         super().__init__(timeout=180)
 
@@ -227,6 +230,8 @@ class InventoryView(discord.ui.View):
         self.card_lookup = card_lookup
         self.base_dir = base_dir
         self.total_rolls = total_rolls
+        self.inventory_owner_name = inventory_owner_name
+        self.read_only = read_only
 
         self.index = 0
         self.showing_overview = True
@@ -294,7 +299,11 @@ class InventoryView(discord.ui.View):
         )
 
         embed = discord.Embed(
-            title="🥟 Bao Inventory Overview",
+    title=(
+        f"🥟 {self.inventory_owner_name}'s Inventory"
+        if self.inventory_owner_name
+        else "🥟 Bao Inventory Overview"
+    ),
             description="Your personal Bao collection",
             color=discord.Color.gold()
         )
@@ -369,14 +378,15 @@ class InventoryView(discord.ui.View):
             self.base_dir
         )
 
-        embed.set_footer(
-            text=(
-                f"Card {self.index + 1}/"
-                f"{len(self.instances)} • "
-                f"Instance #{instance['instance_id']} • "
-                f"!sell {instance['instance_id']}"
-            )
-        )
+        footer = (
+    f"Card {self.index + 1}/{len(self.instances)} • "
+    f"Instance #{instance['instance_id']}"
+)
+
+        if not self.read_only:
+            footer += f" • !sell {instance['instance_id']}"
+
+        embed.set_footer(text=footer)
 
         return embed, image
 

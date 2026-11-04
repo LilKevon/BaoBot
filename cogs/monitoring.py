@@ -28,14 +28,12 @@ class Monitoring(commands.Cog):
             os.environ["MONITOR_CHANNEL_ID"]
         )
 
-        # Separate dashboard state for each Discord application
         self.state_file = None
         self.dashboard_message = None
 
         self.started_at = time.monotonic()
         self.command_count = 0
 
-        # Monitor this Python process only
         self.process = psutil.Process(os.getpid())
         self.process.cpu_percent(interval=None)
 
@@ -170,7 +168,7 @@ class Monitoring(commands.Cog):
         temp_file.replace(self.state_file)
 
     async def find_dashboard(self, channel):
-        # First try the saved message ID
+
         message_id = self.read_message_id()
 
         if message_id:
@@ -183,7 +181,6 @@ class Monitoring(commands.Cog):
             except discord.NotFound:
                 pass
 
-        # Recover an older dashboard if no saved ID works
         async for message in channel.history(limit=100):
             if message.author.id != self.bot.user.id:
                 continue
@@ -241,7 +238,6 @@ class Monitoring(commands.Cog):
     async def before_monitor_loop(self):
         await self.bot.wait_until_ready()
 
-        # Discord identity determines the saved state filename
         self.state_file = (
             BASE_DIR
             / f"dashboard-{self.bot.user.id}.json"

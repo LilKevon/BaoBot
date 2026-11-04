@@ -37,14 +37,15 @@ COMMAND_CATEGORIES = {
         }
     },
     "inventory": {
-        "title": "🃏 Inventory Commands",
-        "description": "Browse and manage your collection.",
-        "commands": {
-            "!inventory / !inv": "Browse cards using buttons and dropdowns.",
-            "!inspect <id>": "Inspect an individual card.",
-            "!collection / !cards": "Shortcut to inventory."
-        }
-    },
+    "title": "🃏 Inventory Commands",
+    "description": "Browse your cards or someone else's.",
+    "commands": {
+        "!inventory / !inv": "View your own inventory.",
+        "!inv @user": "Browse another user's collection.",
+        "!inspect <id>": "Inspect one of your own cards.",
+        "!collection / !cards": "Inventory shortcuts."
+    }
+},
     "trading": {
         "title": "🤝 Trading Commands",
         "description": "Trade Bao cards with other players.",

@@ -6,7 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
+
 load_dotenv(BASE_DIR / ".env.dev", override=True)
+os.environ["BOT_ENV"] = "development"
 
 from bot import bot
 from database import initialize_database
