@@ -4,6 +4,8 @@ import json
 import random
 from pathlib import Path
 from database import get_pity, PITY_THRESHOLDS
+from cogs.card_sale import CardSaleView
+
 
 import discord
 from discord.ext import commands
@@ -145,6 +147,15 @@ class Gacha(commands.Cog):
 
         image_path = BASE_DIR / card["image"]
 
+        sale_view = CardSaleView(
+            owner_id=ctx.author.id,
+            instance_id=instance_id,
+            card_name=card["name"],
+            rarity=rarity,
+            shiny=shiny
+        )
+        
+
 
         title = (
             f"✨ SHINY {card['name']} ✨"
@@ -190,7 +201,11 @@ class Gacha(commands.Cog):
                 inline=False
             )
 
-        await ctx.send(file=image, embed=embed)
+        sale_view.message = await ctx.send(
+    file=image,
+    embed=embed,
+    view=sale_view
+)
 
     
     # @commands.command(name="collection", aliases=["cards"])
