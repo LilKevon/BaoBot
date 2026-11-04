@@ -12,6 +12,13 @@ REGEN_SECONDS = 60
 ROLL_PRICE = 100
 SHINY_MULTIPLIER = 5
 
+DAILY_REWARD = 200
+WEEKLY_REWARD = 1000
+
+DAILY_COOLDOWN = 24 * 60 * 60
+WEEKLY_COOLDOWN = 7 * 24 * 60 * 60
+
+
 SELL_VALUES = {
     "common": 10,
     "uncommon": 20,
@@ -112,7 +119,10 @@ def initialize_database():
             "bao_coins": "INTEGER NOT NULL DEFAULT 0",
             "free_rolls": "INTEGER NOT NULL DEFAULT 5",
             "paid_rolls": "INTEGER NOT NULL DEFAULT 0",
-            "last_regen_at": "INTEGER NOT NULL DEFAULT 0"
+            "last_regen_at": "INTEGER NOT NULL DEFAULT 0",
+            "last_daily_claim": "INTEGER NOT NULL DEFAULT 0",
+            "last_weekly_claim": "INTEGER NOT NULL DEFAULT 0"
+
         }
 
         for column, definition in new_columns.items():
@@ -408,6 +418,105 @@ def perform_roll(user_id, roll_factory):
 
 
 
+
+def perform_multi_roll(user_id, quantity, roll_factory):
+    if not 2 <= quantity <= 10:
+        return {"status": "invalid_quantity"}
+
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        _ensure_player(conn, user_id, now)
+        _ensure_pity(conn, user_id)
+
+        free, _ = _refresh_rolls(conn, user_id, now)
+
+        player = conn.execute("""
+            SELECT paid_rolls
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        paid = player["paid_rolls"]
+        available = free + paid
+
+        if available < quantity:
+            return {
+                "status": "insufficient",
+                "requested": quantity,
+                "available": available
+            }
+
+        free_spent = min(free, quantity)
+        paid_spent = quantity - free_spent
+
+        counters = _get_pity_counters(conn, user_id)
+        results = []
+
+        for _ in range(quantity):
+            # Pity is checked separately for each pull.
+            guarantee = _get_guarantee(counters)
+
+            card, rarity, shiny = roll_factory(guarantee)
+
+            if rarity not in RARITY_ORDER:
+                raise ValueError(
+                    f"Unknown rarity: {rarity}"
+                )
+
+            if "id" not in card:
+                raise ValueError("Card is missing an ID")
+
+            # Update counters for the next pull.
+            _update_pity(
+                conn, user_id, counters, rarity
+            )
+
+            cursor = conn.execute("""
+                INSERT INTO player_cards (
+                    user_id, card_id, rarity, is_shiny
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                user_id,
+                card["id"],
+                rarity,
+                int(shiny)
+            ))
+
+            results.append({
+                "instance_id": cursor.lastrowid,
+                "card": card,
+                "rarity": rarity,
+                "shiny": shiny,
+                "guarantee": guarantee
+            })
+
+        conn.execute("""
+            UPDATE players
+            SET free_rolls = free_rolls - ?,
+                paid_rolls = paid_rolls - ?,
+                total_rolls = total_rolls + ?
+            WHERE user_id = ?
+        """, (
+            free_spent,
+            paid_spent,
+            quantity,
+            user_id
+        ))
+
+        return {
+            "status": "success",
+            "results": results,
+            "free_spent": free_spent,
+            "paid_spent": paid_spent,
+            "pity": counters.copy()
+        }
+
+
+
 def buy_rolls(user_id, quantity):
     if not 1 <= quantity <= 100:
         return {"status": "invalid_quantity"}
@@ -499,6 +608,131 @@ def sell_card(user_id, instance_id, confirmed=False):
             "shiny": shiny,
             "value": value
         }
+
+
+def _prepare_multi_sale(conn, user_id, instance_ids):
+    """Validate cards and calculate the sale payout."""
+
+    if not 2 <= len(instance_ids) <= 25:
+        return {"status": "invalid_quantity"}
+
+    if len(set(instance_ids)) != len(instance_ids):
+        return {"status": "duplicate_ids"}
+
+    placeholders = ",".join("?" for _ in instance_ids)
+
+    rows = conn.execute(f"""
+        SELECT instance_id, card_id, rarity, is_shiny
+        FROM player_cards
+        WHERE user_id = ?
+          AND instance_id IN ({placeholders})
+    """, (user_id, *instance_ids)).fetchall()
+
+    if len(rows) != len(instance_ids):
+        return {"status": "missing_cards"}
+
+    by_id = {
+        row["instance_id"]: dict(row)
+        for row in rows
+    }
+
+    cards = []
+    total = 0
+    protected = False
+
+    for instance_id in instance_ids:
+        card = by_id[instance_id]
+        rarity = card["rarity"]
+        shiny = bool(card["is_shiny"])
+
+        if rarity not in SELL_VALUES:
+            return {"status": "unknown_rarity"}
+
+        value = SELL_VALUES[rarity]
+
+        if shiny:
+            value *= SHINY_MULTIPLIER
+
+        card["value"] = value
+        cards.append(card)
+
+        total += value
+
+        if shiny or rarity in PROTECTED_RARITIES:
+            protected = True
+
+    return {
+        "status": "valid",
+        "cards": cards,
+        "total": total,
+        "protected": protected
+    }
+
+
+def preview_multi_sale(user_id, instance_ids):
+    with database() as conn:
+        return _prepare_multi_sale(
+            conn,
+            user_id,
+            instance_ids
+        )
+
+
+def execute_multi_sale(
+    user_id,
+    instance_ids,
+    confirmed=False,
+    expected_total=None
+):
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        result = _prepare_multi_sale(
+            conn,
+            user_id,
+            instance_ids
+        )
+
+        if result["status"] != "valid":
+            return result
+
+        if result["protected"] and not confirmed:
+            return {
+                "status": "confirmation_required",
+                **result
+                
+            }
+
+        # Ensure the confirmation still matches the preview.
+        if expected_total is not None:
+            if result["total"] != expected_total:
+                return {"status": "sale_changed"}
+
+        placeholders = ",".join("?" for _ in instance_ids)
+
+        cursor = conn.execute(f"""
+            DELETE FROM player_cards
+            WHERE user_id = ?
+              AND instance_id IN ({placeholders})
+        """, (user_id, *instance_ids))
+
+        if cursor.rowcount != len(instance_ids):
+            raise RuntimeError(
+                "Batch sale deleted an unexpected number of cards"
+            )
+
+        conn.execute("""
+            UPDATE players
+            SET bao_coins = bao_coins + ?
+            WHERE user_id = ?
+        """, (result["total"], user_id))
+
+        return {
+            "status": "success",
+            "cards_sold": len(instance_ids),
+            "total": result["total"]
+        }
+
 
 
 def get_collection(user_id):
@@ -670,5 +904,100 @@ def execute_trade(
         ))
 
         return {"status": "success"}
+
+
+
+def claim_reward(user_id, reward_type):
+    rewards = {
+        "daily": (
+            DAILY_REWARD,
+            DAILY_COOLDOWN,
+            "last_daily_claim"
+        ),
+        "weekly": (
+            WEEKLY_REWARD,
+            WEEKLY_COOLDOWN,
+            "last_weekly_claim"
+        )
+    }
+
+    if reward_type not in rewards:
+        raise ValueError("Invalid reward type")
+
+    amount, cooldown, column = rewards[reward_type]
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _ensure_player(conn, user_id, now)
+
+        player = conn.execute(f"""
+            SELECT bao_coins, {column}
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        last_claim = player[column]
+        remaining = max(
+            0,
+            last_claim + cooldown - now
+        ) if last_claim else 0
+
+        if remaining > 0:
+            return {
+                "status": "cooldown",
+                "remaining": remaining,
+                "coins": player["bao_coins"]
+            }
+
+        conn.execute(f"""
+            UPDATE players
+            SET bao_coins = bao_coins + ?,
+                {column} = ?
+            WHERE user_id = ?
+        """, (amount, now, user_id))
+
+        return {
+            "status": "success",
+            "reward": amount,
+            "coins": player["bao_coins"] + amount,
+            "next_claim": now + cooldown
+        }
+
+
+def get_reward_cooldowns(user_id):
+    now = int(time.time())
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _ensure_player(conn, user_id, now)
+
+        player = conn.execute("""
+            SELECT last_daily_claim, last_weekly_claim
+            FROM players
+            WHERE user_id = ?
+        """, (user_id,)).fetchone()
+
+        def remaining(last_claim, cooldown):
+            if not last_claim:
+                return 0
+
+            return max(
+                0,
+                last_claim + cooldown - now
+            )
+
+        return {
+            "daily": remaining(
+                player["last_daily_claim"],
+                DAILY_COOLDOWN
+            ),
+            "weekly": remaining(
+                player["last_weekly_claim"],
+                WEEKLY_COOLDOWN
+            )
+        }
+
+
 
 

@@ -7,6 +7,8 @@ from database import get_pity, PITY_THRESHOLDS
 from cogs.card_sale import CardSaleView
 
 
+
+
 import discord
 from discord.ext import commands
 from database import (
@@ -15,10 +17,16 @@ from database import (
     buy_rolls,
     sell_card,
     get_collection,
-    get_total_rolls
+    get_total_rolls,
+    preview_multi_sale,
+    execute_multi_sale,
+    get_inventory,
+    get_card_instance,
+    perform_multi_roll
+
 )
 
-from database import get_inventory, get_card_instance
+
 
 from cogs.inventory import (
     InventoryView,
@@ -31,15 +39,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CARDS_FILE = BASE_DIR / "data" / "cards.json"
 
 
-RARITY_WEIGHTS = { 
-    "common": 45000,       # Reduced from ~65% to 45%
-    "uncommon": 25000,     # Increased to give a steady stream of green drops
-    "rare": 15000,         # Boosted for more frequent "good" drops
-    "epic": 8000,          # Doubled the chance for major milestones
-    "legendary": 5000,     # Quintupled (5x) to make them attainable
-    "mythical": 1500,      # Boosted 15x so players actually see them
-    "divine": 450,         # Boosted 45x to turn "impossible" into "chasing a jackpot"
-    "peebing_cool": 50     # Boosted 50x so the ultimate tier is a rare myth rather than a mathematical miracle
+RARITY_WEIGHTS = {
+    "common": 58922,
+    "uncommon": 21500,
+    "rare": 11500,
+    "epic": 5200,
+    "legendary": 2200,
+    "mythical": 520,
+    "divine": 142,
+    "peebing_cool": 16
 }
 
 RARITY_COLORS = {
@@ -96,6 +104,300 @@ class Gacha(commands.Cog):
         shiny = random.random() < SHINY_CHANCE
 
         return card, rarity, shiny
+
+    
+    @commands.command(
+        name="multiroll",
+        aliases=["mult", "rollmulti"]
+    )
+    @commands.guild_only()
+    @commands.cooldown(
+        1, 2, commands.BucketType.user
+    )
+    async def multiroll(self, ctx, quantity: int = 10):
+
+        if not 2 <= quantity <= 10:
+            await ctx.send(
+                "❌ Multi-roll quantity must be "
+                "between 2 and 10.\n"
+                "Example: `!multiroll 10`"
+            )
+            return
+
+        def generate_roll(guarantee):
+            card, rarity, shiny = self.roll_card(
+                minimum_rarity=guarantee
+            )
+
+            image_path = BASE_DIR / card["image"]
+
+            if not image_path.is_file():
+                raise FileNotFoundError(
+                    f"Missing artwork: {image_path}"
+                )
+
+            return card, rarity, shiny
+
+        try:
+            result = await asyncio.to_thread(
+                perform_multi_roll,
+                ctx.author.id,
+                quantity,
+                generate_roll
+            )
+
+        except FileNotFoundError as exc:
+            print(f"Multi-roll image error: {exc}")
+            await ctx.send(
+                "❌ A card image is missing. "
+                "No rolls were consumed."
+            )
+            return
+
+        if result["status"] == "insufficient":
+            await ctx.send(
+                "❌ **Not enough rolls!**\n"
+                f"You requested **{quantity}**, "
+                f"but have **{result['available']}**.\n"
+                "Use `!balance` to check your rolls "
+                "or `!buyroll` to purchase more."
+            )
+            return
+
+        if result["status"] != "success":
+            await ctx.send(
+                "❌ Unable to complete multi-roll."
+            )
+            return
+
+        icons = {
+            "common": "⚪",
+            "uncommon": "🟢",
+            "rare": "🔵",
+            "epic": "🟣",
+            "legendary": "🟡",
+            "mythical": "🔴",
+            "divine": "💎",
+            "peebing_cool": "🥟"
+        }
+
+        lines = []
+
+        for index, pull in enumerate(
+            result["results"], start=1
+        ):
+            card = pull["card"]
+            rarity = pull["rarity"]
+            shiny = pull["shiny"]
+
+            icon = icons.get(rarity, "❔")
+            name = discord.utils.escape_markdown(
+                card["name"]
+            )
+            rarity_name = rarity.replace(
+                "_", " "
+            ).title()
+
+            shiny_label = " ✨" if shiny else ""
+            pity_label = (
+                " 🎯" if pull["guarantee"]
+                else ""
+            )
+
+            lines.append(
+                f"**{index}.** {icon} **{name}**"
+                f"{shiny_label}\n"
+                f"   {rarity_name}{pity_label} "
+                f"• `#{pull['instance_id']}`"
+            )
+
+        embed = discord.Embed(
+            title=f"🎰 BaoBot {quantity}× Multi-Roll",
+            description="\n".join(lines),
+            color=discord.Color.gold()
+        )
+
+        embed.add_field(
+            name="🎟️ Free Rolls Used",
+            value=str(result["free_spent"]),
+            inline=True
+        )
+
+        embed.add_field(
+            name="🎫 Purchased Rolls Used",
+            value=str(result["paid_spent"]),
+            inline=True
+        )
+
+        shiny_count = sum(
+            pull["shiny"]
+            for pull in result["results"]
+        )
+
+        embed.add_field(
+            name="✨ Shinies",
+            value=str(shiny_count),
+            inline=True
+        )
+
+        embed.set_footer(
+            text=(
+                "🎯 = Pity guarantee • "
+                "Use !inventory to view your cards"
+            )
+        )
+
+        await ctx.send(embed=embed)
+
+    
+    @commands.command(name="multisell", aliases=["msell"])
+    @commands.guild_only()
+    @commands.cooldown(1, 2, commands.BucketType.user)
+    async def multisell(self, ctx, *arguments: str):
+        if not arguments:
+            await ctx.send(
+                "❌ Usage: `!multisell 101 102 103`\n"
+                "Separate card instance IDs with spaces."
+            )
+            return
+
+        confirmed = arguments[-1].lower() == "confirm"
+
+        tokens = (
+            arguments[:-1]
+            if confirmed
+            else arguments
+        )
+
+        try:
+            instance_ids = [int(x) for x in tokens]
+        except ValueError:
+            await ctx.send(
+                "❌ Use numeric card IDs separated by spaces.\n"
+                "Example: `!multisell 101 102 103`"
+            )
+            return
+
+        if not 2 <= len(instance_ids) <= 25:
+            await ctx.send(
+                "❌ Select between 2 and 25 cards."
+            )
+            return
+
+        preview = await asyncio.to_thread(
+            preview_multi_sale,
+            ctx.author.id,
+            instance_ids
+        )
+
+        if preview["status"] != "valid":
+            errors = {
+                "duplicate_ids":
+                    "You entered the same card ID twice.",
+                "missing_cards":
+                    "One or more cards don't belong to you.",
+                "unknown_rarity":
+                    "One card has an unknown rarity.",
+                "invalid_quantity":
+                    "Select between 2 and 25 cards."
+            }
+
+            await ctx.send(
+                "❌ " + errors.get(
+                    preview["status"],
+                    "Unable to prepare sale."
+                )
+            )
+            return
+
+        lines = []
+
+        for card in preview["cards"]:
+            info = self.card_lookup.get(
+                card["card_id"], {}
+            )
+
+            name = discord.utils.escape_markdown(
+                info.get("name", card["card_id"])
+            )
+
+            rarity = card["rarity"].replace(
+                "_", " "
+            ).title()
+
+            shiny = "✨ " if card["is_shiny"] else ""
+
+            lines.append(
+                f"**#{card['instance_id']}** "
+                f"{shiny}{name} ({rarity}) "
+                f"— {card['value']:,} BC"
+            )
+
+        embed = discord.Embed(
+            title="🪙 BaoBot Multi-Sell",
+            description="\n".join(lines),
+            color=discord.Color.gold()
+        )
+
+        embed.add_field(
+            name="Cards Selected",
+            value=str(len(instance_ids)),
+            inline=True
+        )
+
+        embed.add_field(
+            name="Total Payout",
+            value=f"**{preview['total']:,} BC**",
+            inline=True
+        )
+
+        # Protect valuable cards from accidental sales.
+        if preview["protected"] and not confirmed:
+            ids = " ".join(map(str, instance_ids))
+
+            embed.add_field(
+                name="⚠️ Confirmation Required",
+                value=(
+                    "This batch contains a shiny or "
+                    "Legendary+ card.\n\n"
+                    "Confirm with:\n"
+                    f"`!multisell {ids} confirm`"
+                ),
+                inline=False
+            )
+
+            await ctx.send(embed=embed)
+            return
+
+        result = await asyncio.to_thread(
+            execute_multi_sale,
+            ctx.author.id,
+            instance_ids,
+            confirmed
+        )
+
+        if result["status"] != "success":
+            await ctx.send(
+                "❌ Sale failed. One or more cards "
+                "may no longer be available.\n"
+                "No partial sale was completed."
+            )
+            return
+
+        embed.title = "✅ Multi-Sell Complete!"
+        embed.color = discord.Color.green()
+        embed.description = (
+            f"Sold **{result['cards_sold']} cards** "
+            f"for **{result['total']:,} BaoCoins!**"
+        )
+
+        embed.clear_fields()
+
+        embed.set_footer(
+            text="Use !balance to check your BaoCoins."
+        )
+
+        await ctx.send(embed=embed)
 
 
 

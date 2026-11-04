@@ -20,7 +20,7 @@ async def main():
         await bot.load_extension("cogs.monitoring")
         await bot.load_extension("cogs.trading")
         await bot.load_extension("cogs.help_menu")
-        
+        await bot.load_extension("cogs.rewards")
         await bot.start(os.environ["DISCORD_BOT_TOKEN"])
 
 

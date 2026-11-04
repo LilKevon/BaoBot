@@ -70,7 +70,36 @@ COMMAND_CATEGORIES = {
             "!leave": "Leave the voice channel.",
             "!sound": "Play a Bao soundbite."
         }
+    },
+
+    "economy": {
+    "title": "🪙 Economy Commands",
+    "description": "Earn and spend your BaoCoins.",
+    "commands": {
+        "!balance / !bal": "Check BaoCoins and rolls.",
+        "!daily": "Claim 200 BC every 24 hours.",
+        "!weekly": "Claim 1,000 BC every 7 days.",
+        "!rewards": "View reward cooldowns.",
+        "!buyroll <amount>": "Buy rolls for 100 BC each.",
+        "!sell <instance_id>": "Sell a card for BaoCoins."
+        "!multisell <id1> <id2> ..." "Sell 2–25 cards using space-separated IDs."
     }
+},
+"gacha": {
+    "title": "🎰 Gacha Commands",
+    "description": "Roll for the ultimate Bao.",
+    "commands": {
+        "!roll": "Pull one random Bao card.",
+        "!multiroll [2-10]": "Pull up to 10 cards at once.",
+        "!mult": "Shortcut for !multiroll.",
+        "!pity": "Check your rarity guarantees."
+    }
+},
+
+
+
+
+    
 }
 
 
