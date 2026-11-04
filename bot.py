@@ -5,6 +5,9 @@ import random
 import math
 import time
 from pathlib import Path
+import difflib
+import logging
+
 
 import discord
 from discord.ext import commands
@@ -42,7 +45,7 @@ DEFAULT_WEIGHT = 50
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 TARGET_USER_ID = 357642743662772225
 # TARGET_USER_ID = 1158232274349850724
@@ -370,6 +373,108 @@ async def sound(ctx):
     finally:
         if vc and vc.is_connected():
             await vc.disconnect()
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    # Allow commands with their own handlers to
+    # manage errors without duplicate responses.
+    if ctx.command is not None:
+        if ctx.command.has_error_handler():
+            return
+
+        if (
+            ctx.cog is not None
+            and ctx.cog.has_error_handler()
+        ):
+            return
+
+    if isinstance(error, commands.CommandNotFound):
+        attempted = ctx.invoked_with or ""
+
+        # Include command aliases in suggestions.
+        command_names = {
+            name
+            for name, command in bot.all_commands.items()
+            if not command.hidden
+        }
+
+        matches = difflib.get_close_matches(
+            attempted.lower(),
+            sorted(command_names),
+            n=1,
+            cutoff=0.6
+        )
+
+        message = (
+            f"❌ **What the peeb did you say to me?** `!{attempted}`\n"
+        )
+
+        if matches:
+            message += (
+                f"Are you peebing stupid? Might be `!{matches[0]}`?\n"
+            )
+        else:
+            message += (
+                "I might be BBB,"
+                "but you might be the real butt boy.\n"
+            )
+
+        message += "Use `!help` to see all commands."
+
+        await ctx.send(message)
+        return
+
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(
+            "⏳ **Slow down!**\n"
+            f"Try again in **{error.retry_after:.1f}s**."
+        )
+        return
+
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(
+            f"❌ Missing argument: `{error.param.name}`.\n"
+            "Use `!help` to check command usage."
+        )
+        return
+
+    if isinstance(error, commands.BadArgument):
+        await ctx.send(
+            "❌ Invalid argument or user.\n"
+            "Check your input and try again."
+        )
+        return
+
+    if isinstance(error, commands.NoPrivateMessage):
+        await ctx.send(
+            "❌ This command only works in a server."
+        )
+        return
+
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send(
+            "❌ You can't use that command here."
+        )
+        return
+
+    # Unexpected errors should still appear in logs
+    # so you can diagnose bugs.
+    logging.exception(
+        "Unexpected error in command %s",
+        ctx.command,
+        exc_info=(
+            type(error),
+            error,
+            error.__traceback__
+        )
+    )
+
+    await ctx.send(
+        "⚠️ Something went wrong while running "
+        "that command."
+    )
+
 
 
 

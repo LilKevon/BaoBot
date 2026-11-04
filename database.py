@@ -576,3 +576,99 @@ def get_card_instance(user_id, instance_id):
 
         return dict(row) if row else None
 
+
+
+def get_trade_preview(
+    sender_id, receiver_id,
+    sender_card_id, receiver_card_id
+):
+    """Validate both cards before creating an offer."""
+    if sender_id == receiver_id:
+        return {"status": "same_user"}
+
+    if sender_card_id == receiver_card_id:
+        return {"status": "same_card"}
+
+    with database() as conn:
+        sender_card = conn.execute("""
+            SELECT instance_id, card_id, rarity, is_shiny
+            FROM player_cards
+            WHERE instance_id = ? AND user_id = ?
+        """, (sender_card_id, sender_id)).fetchone()
+
+        receiver_card = conn.execute("""
+            SELECT instance_id, card_id, rarity, is_shiny
+            FROM player_cards
+            WHERE instance_id = ? AND user_id = ?
+        """, (receiver_card_id, receiver_id)).fetchone()
+
+        if sender_card is None:
+            return {"status": "sender_missing"}
+
+        if receiver_card is None:
+            return {"status": "receiver_missing"}
+
+        return {
+            "status": "valid",
+            "sender_card": dict(sender_card),
+            "receiver_card": dict(receiver_card)
+        }
+
+
+def execute_trade(
+    sender_id, receiver_id,
+    sender_card_id, receiver_card_id
+):
+    """Atomically exchange two card instances."""
+    if sender_id == receiver_id:
+        return {"status": "same_user"}
+
+    if sender_card_id == receiver_card_id:
+        return {"status": "same_card"}
+
+    with database() as conn:
+        # Prevent other writers from changing ownership
+        # between validation and exchange.
+        conn.execute("BEGIN IMMEDIATE")
+
+        cards = conn.execute("""
+            SELECT instance_id, user_id
+            FROM player_cards
+            WHERE instance_id IN (?, ?)
+        """, (
+            sender_card_id,
+            receiver_card_id
+        )).fetchall()
+
+        owners = {
+            row["instance_id"]: row["user_id"]
+            for row in cards
+        }
+
+        if owners.get(sender_card_id) != sender_id:
+            return {"status": "sender_missing"}
+
+        if owners.get(receiver_card_id) != receiver_id:
+            return {"status": "receiver_missing"}
+
+        conn.execute("""
+            UPDATE player_cards
+            SET user_id = ?
+            WHERE instance_id = ?
+        """, (
+            receiver_id,
+            sender_card_id
+        ))
+
+        conn.execute("""
+            UPDATE player_cards
+            SET user_id = ?
+            WHERE instance_id = ?
+        """, (
+            sender_id,
+            receiver_card_id
+        ))
+
+        return {"status": "success"}
+
+
