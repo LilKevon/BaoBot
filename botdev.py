@@ -25,6 +25,8 @@ async def main():
         await bot.load_extension("cogs.rewards")
         await bot.load_extension("cogs.dictionary")
         await bot.load_extension("cogs.slots")
+        await bot.load_extension("cogs.gallery")
+        
         await bot.start(os.environ["DISCORD_BOT_TOKEN"])
 
 

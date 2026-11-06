@@ -17,7 +17,8 @@ COMMAND_CATEGORIES = {
             "🤝 Trading": "Exchange cards with other players.",
             "📖 Dictionary": "Explore your server's inside jokes and definitions.",
             "🎲 Casino": "Try your luck at Bao Slots.",
-            "🎭 Fun": "Classic BaoBot commands."
+            "🎭 Fun": "Classic BaoBot commands.",
+            "🖼️ Gallery": "Showcase and protect your 5 favourite cards.",
         }
     },
 
@@ -128,7 +129,27 @@ COMMAND_CATEGORIES = {
             "!leave": "Leave the voice channel.",
             "!sound": "Play a Bao soundbite."
         }
+    },
+    "gallery": {
+    "title": "🖼️ Gallery Commands",
+    "description": (
+        "Showcase and protect up to 5 of your favourite Bao cards!\n\n"
+        "Cards in your gallery are automatically locked "
+        "from selling and trading."
+    ),
+    "commands": {
+        "!gallery": "View your favourite cards.",
+        "!gallery @user": "View another player's gallery.",
+        "!favadd <instance_id>": (
+            "Add a card to your gallery and lock it."
+        ),
+        "!favremove <instance_id>": (
+            "Remove a card from your gallery and unlock it."
+        )
     }
+},
+
+    
 }
 
 
@@ -223,7 +244,7 @@ class HelpView(discord.ui.View):
     async def trading_button(self, interaction, button):
         await self.change_category(interaction, "trading")
 
-    # ROW 1
+
 
     @discord.ui.button(
         label="Dictionary",
@@ -252,6 +273,14 @@ class HelpView(discord.ui.View):
     async def fun_button(self, interaction, button):
         await self.change_category(interaction, "fun")
 
+    @discord.ui.button(
+    label="Gallery",
+    emoji="🖼️",
+    style=discord.ButtonStyle.primary,
+    row=1
+)
+    async def gallery_button(self, interaction, button):
+        await self.change_category(interaction, "gallery")
     async def on_timeout(self):
         for item in self.children:
             item.disabled = True
