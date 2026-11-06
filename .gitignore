@@ -1,12 +1,17 @@
-
-# Environment files
+# Environment files / secrets
 .env
 .env.*
+!.env.example
 
 # Python
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.egg-info/
 
 # SQLite databases
 *.db
@@ -18,16 +23,10 @@ __pycache__/
 dashboard-*.json
 dashboard-*.tmp
 
-#tests
-test_gacha.py
-test_pity.py
-
-
-#caching
+# Generated files and caches
 files/cache/
 
-
-#files:
+# Local test scripts (optional)
 test_gacha.py
 test_pity.py
 test_slots.py
