@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 MAX_LEVEL = 20
 
-# Initial proposed values. We will balance these later.
 RARITY_MULTIPLIERS = {
     "common": 1.00,
     "uncommon": 1.10,
@@ -33,7 +32,6 @@ class CombatStats:
     speed: int
 
 
-# Example archetypes; these are not the final card catalogue.
 ARCHETYPES = {
     "balanced": BaseStats(500, 75, 55, 50),
     "bruiser": BaseStats(650, 90, 65, 35),
