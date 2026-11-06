@@ -4,6 +4,53 @@ import shlex
 import time
 from pathlib import Path
 
+import os
+import sys
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+
+if len(sys.argv) != 2 or sys.argv[1].lower() not in {
+    "dev", "prod"
+}:
+    print("Usage: py control.py <dev|prod>")
+    sys.exit(1)
+
+ENVIRONMENT = sys.argv[1].lower()
+
+if ENVIRONMENT == "dev":
+    env_file = BASE_DIR / ".env.dev"
+    os.environ["BOT_ENV"] = "development"
+else:
+    env_file = BASE_DIR / ".env"
+    os.environ["BOT_ENV"] = "production"
+
+# Load the selected environment without allowing its
+# BOT_ENV value to override our explicit selection.
+load_dotenv(env_file, override=True)
+os.environ["BOT_ENV"] = (
+    "development" if ENVIRONMENT == "dev"
+    else "production"
+)
+
+# Import only AFTER selecting the environment.
+from database import DB_PATH
+
+print(f"🥟 Control environment: {ENVIRONMENT.upper()}")
+print(f"📂 Database: {DB_PATH}")
+
+if ENVIRONMENT == "prod":
+    confirmation = input(
+        "\n⚠️ PRODUCTION DATABASE! "
+        "Type PROD to continue: "
+    )
+
+    if confirmation != "PROD":
+        print("Cancelled.")
+        sys.exit(0)
+
+CARDS_PATH = BASE_DIR / "data" / "cards.json"
+
 from database import (
     database,
     initialize_database,
@@ -13,11 +60,9 @@ from database import (
     PITY_COLUMNS
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-CARDS_PATH = BASE_DIR / "data" / "cards.json"
 
 
-ADMIN_USER_ID = 1560027010347044934
+ADMIN_USER_ID = 1158232274349850724
 
 if ADMIN_USER_ID == 1560027010347044934:
     print("BOT")
@@ -50,6 +95,26 @@ def give_coins(user_id, amount):
         conn.execute("""
             UPDATE players
             SET bao_coins = bao_coins + ?
+            WHERE user_id = ?
+        """, (amount, user_id))
+
+def del_coins(user_id, amount):
+    if amount <= 0:
+        raise ValueError("Amount must be positive.")
+
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        conn.execute("""
+            INSERT OR IGNORE INTO players (
+                user_id, last_regen_at
+            )
+            VALUES (?, ?)
+        """, (user_id, int(time.time())))
+
+        conn.execute("""
+            UPDATE players
+            SET bao_coins = bao_coins - ?
             WHERE user_id = ?
         """, (amount, user_id))
 
@@ -203,6 +268,7 @@ def show_account(user_id):
     print("==========================\n")
 
 
+
 def main():
     initialize_database()
     require_admin_id()
@@ -239,6 +305,11 @@ Commands:
             elif command in ("inspect", "balance"):
                 show_account(ADMIN_USER_ID)
 
+            elif command == "remove" and len(args) >= 3:
+                kind = args[1].lower()
+                if kind == "coins" and len(args) == 3:
+                    del_coins(ADMIN_USER_ID, int(args[2]))
+                    print("✅ BaoCoins removed.")
             elif command == "give" and len(args) >= 3:
                 kind = args[1].lower()
 
@@ -249,6 +320,7 @@ Commands:
                 elif kind == "rolls" and len(args) == 3:
                     give_rolls(ADMIN_USER_ID, int(args[2]))
                     print("✅ Purchased rolls added.")
+                
 
                 elif kind == "card" and len(args) in (4, 5):
                     shiny = (
