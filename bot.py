@@ -529,7 +529,7 @@ async def main():
         await bot.load_extension("cogs.trading")
         await bot.load_extension("cogs.help_menu")
         await bot.load_extension("cogs.rewards")
-
+        await bot.load_extension("cogs.dictionary")
         await bot.start(os.environ["DISCORD_BOT_TOKEN"])
 
 

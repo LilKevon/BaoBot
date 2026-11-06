@@ -98,6 +98,18 @@ COMMAND_CATEGORIES = {
 },
 
 
+"📖 Dictionary": [
+    ("!dictionary / !dict", "Browse the server dictionary with dropdowns and search."),
+    ("!define <term>", "Look up a server dictionary definition."),
+    ("!dictadd <term> | <definition>", "Add a new dictionary entry."),
+    ("!dictedit <term> | <definition>", "Edit an existing definition (author/moderator)."),
+    ("!dictremove <term>", "Remove an entry (author/moderator)."),
+    ("!dictrandom", "Display a random dictionary entry."),
+],
+
+
+
+
 
 
     
@@ -174,6 +186,18 @@ class HelpView(discord.ui.View):
     )
     async def economy_button(self, interaction, button):
         await self.change_category(interaction, "economy")
+
+    @discord.ui.button(
+    label="Dictionary",
+    emoji="📖",
+    style=discord.ButtonStyle.primary,
+    row=1
+)
+    async def dictionary_help(self, interaction, button):
+        await interaction.response.edit_message(
+            embed=self.create_category_embed("📖 Dictionary"),
+            view=self
+        )
 
     @discord.ui.button(
         label="Inventory",
