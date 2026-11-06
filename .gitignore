@@ -21,3 +21,13 @@ dashboard-*.tmp
 #tests
 test_gacha.py
 test_pity.py
+
+
+#caching
+files/cache/
+
+
+#files:
+test_gacha.py
+test_pity.py
+test_slots.py

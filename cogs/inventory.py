@@ -1,6 +1,6 @@
 
 from pathlib import Path
-
+from utils.shiny import get_card_file
 import discord
 from collections import Counter 
 
@@ -103,6 +103,7 @@ def build_card_display(instance, card_lookup, base_dir):
         )
     )
 
+    
     image_file = None
     image_name = card.get("image")
 
@@ -110,13 +111,13 @@ def build_card_display(instance, card_lookup, base_dir):
         image_path = base_dir / image_name
 
         if image_path.is_file():
-            image_file = discord.File(
+            image_file = get_card_file(
                 image_path,
-                filename=image_path.name
+                bool(instance["is_shiny"])
             )
 
             embed.set_image(
-                url=f"attachment://{image_path.name}"
+                url=f"attachment://{image_file.filename}"
             )
 
     return embed, image_file
@@ -410,16 +411,22 @@ class InventoryView(discord.ui.View):
         self.showing_overview = False
         await self.refresh_message(interaction)
 
+    
     async def refresh_message(self, interaction):
         self.update_controls()
 
         embed, image = self.current_display()
 
-        await interaction.response.edit_message(
-            embed=embed,
-            attachments=[image] if image else [],
-            view=self
-        )
+        try:
+            await interaction.response.edit_message(
+                embed=embed,
+                attachments=[image] if image else [],
+                view=self
+            )
+        finally:
+            if image:
+                image.close()
+
 
     @discord.ui.button(
         label="Previous",

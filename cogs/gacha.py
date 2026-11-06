@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from database import get_pity, PITY_THRESHOLDS
 from cogs.card_sale import CardSaleView
-
+from utils.shiny import get_card_file
 
 
 
@@ -484,14 +484,14 @@ class Gacha(commands.Cog):
             text=f"Card Instance #{instance_id}"
         )
 
-        image = discord.File(
-            image_path,
-            filename=image_path.name
-        )
+        
+        image_path = BASE_DIR / card["image"]
+        file = get_card_file(image_path, shiny)
 
         embed.set_image(
-            url=f"attachment://{image_path.name}"
+            url=f"attachment://{file.filename}"
         )
+
         if result["guarantee"] is not None:
             embed.add_field(
                 name="🎯 Pity Guarantee",
@@ -504,7 +504,7 @@ class Gacha(commands.Cog):
             )
 
         sale_view.message = await ctx.send(
-    file=image,
+    file=file,
     embed=embed,
     view=sale_view
 )
