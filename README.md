@@ -296,6 +296,8 @@ Card data, balances, and pity progression are stored locally in SQLite.
 
 Database files, credentials, and environment configuration should never be committed to version control.
 
+UPDATE 11/6/2026: BBB IS OFFICIALLY ON THE CLOUD! Hosted with Alture, BBB will now be on 24/7, barring host outages.
+
 ---
 
 ## 👨‍💻 Author
