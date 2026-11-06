@@ -15,47 +15,104 @@ COMMAND_CATEGORIES = {
             "🪙 Economy": "Manage BaoCoins and roll purchases.",
             "🃏 Inventory": "Browse your personal collection.",
             "🤝 Trading": "Exchange cards with other players.",
+            "📖 Dictionary": "Explore your server's inside jokes and definitions.",
+            "🎲 Casino": "Try your luck at Bao Slots.",
             "🎭 Fun": "Classic BaoBot commands."
         }
     },
+
     "gacha": {
         "title": "🎰 Gacha Commands",
         "description": "Roll for the ultimate Bao.",
         "commands": {
-            "!roll": "Pull a random Bao card.",
+            "!roll": "Pull one random Bao card.",
+            "!multiroll [2-10]": "Pull up to 10 cards at once.",
+            "!mult": "Shortcut for !multiroll.",
             "!pity": "Check your rarity guarantees."
         }
     },
+
     "economy": {
         "title": "🪙 Economy Commands",
         "description": "Earn and spend your BaoCoins.",
         "commands": {
-            "!balance / !bal": "Check coins and available rolls.",
-            "!buyroll <amount>": "Purchase extra rolls for 100 BC each.",
+            "!balance / !bal": "Check BaoCoins and available rolls.",
+            "!daily": "Claim 200 BC every 24 hours.",
+            "!weekly": "Claim 1,000 BC every 7 days.",
+            "!rewards": "View reward cooldowns.",
+            "!buyroll <amount>": "Purchase rolls for 100 BC each.",
             "!sell <instance_id>": "Sell an owned card.",
-            "!sell <id> confirm": "Confirm selling a valuable card."
+            "!sell <id> confirm": "Confirm selling a valuable card.",
+            "!multisell <id1> <id2> ...": (
+                "Sell 2–25 cards using space-separated IDs."
+            )
         }
     },
+
     "inventory": {
-    "title": "🃏 Inventory Commands",
-    "description": "Browse your cards or someone else's.",
-    "commands": {
-        "!inventory / !inv": "View your own inventory.",
-        "!inv @user": "Browse another user's collection.",
-        "!inspect <id>": "Inspect one of your own cards.",
-        "!collection / !cards": "Inventory shortcuts."
-    }
-},
+        "title": "🃏 Inventory Commands",
+        "description": "Browse your cards or someone else's.",
+        "commands": {
+            "!inventory / !inv": "View your own inventory.",
+            "!inv @user": "Browse another user's collection.",
+            "!inspect <id>": "Inspect one of your owned cards.",
+            "!collection / !cards": "Inventory shortcuts."
+        }
+    },
+
     "trading": {
         "title": "🤝 Trading Commands",
         "description": "Trade Bao cards with other players.",
         "commands": {
-            "!trade @player <your_id> <their_id>":
-                "Offer one card in exchange for another.",
+            "!trade @player <your_id> <their_id>": (
+                "Offer one card in exchange for another."
+            ),
             "!inventory": "Find card instance IDs.",
             "!inspect <id>": "Inspect an owned card."
         }
     },
+
+    "dictionary": {
+        "title": "📖 Dictionary Commands",
+        "description": (
+            "Your server's collection of inside jokes, "
+            "slang, and questionable definitions.\n\n"
+            "Use `!dictionary` to browse entries and "
+            "search using the interactive modal."
+        ),
+        "commands": {
+            "!dictionary / !dict": (
+                "Browse definitions using dropdowns and search."
+            ),
+            "!define <term>": "Look up a dictionary definition.",
+            "!dictadd <term> | <definition>": (
+                "Add a new dictionary entry."
+            ),
+            "!dictedit <term> | <definition>": (
+                "Edit an entry (author or moderator)."
+            ),
+            "!dictremove <term>": (
+                "Remove an entry (author or moderator)."
+            ),
+            "!dictrandom": "Display a random dictionary entry."
+        }
+    },
+
+    "casino": {
+        "title": "🎲 Bao Casino Commands",
+        "description": (
+            "Risk your BaoCoins for glory!\n\n"
+            "Current games: Bao Slots."
+        ),
+        "commands": {
+            "!slots <bet>": (
+                "Spin the slot machine using 10–500 BaoCoins."
+            ),
+            "!slot / !slots": "Slot machine command aliases.",
+            "!slotstats": "View your lifetime casino statistics."
+        }
+    },
+
     "fun": {
         "title": "🎭 Fun Commands",
         "description": "The original BaoBot experience.",
@@ -71,48 +128,7 @@ COMMAND_CATEGORIES = {
             "!leave": "Leave the voice channel.",
             "!sound": "Play a Bao soundbite."
         }
-    },
-
-    "economy": {
-    "title": "🪙 Economy Commands",
-    "description": "Earn and spend your BaoCoins.",
-    "commands": {
-        "!balance / !bal": "Check BaoCoins and rolls.",
-        "!daily": "Claim 200 BC every 24 hours.",
-        "!weekly": "Claim 1,000 BC every 7 days.",
-        "!rewards": "View reward cooldowns.",
-        "!buyroll <amount>": "Buy rolls for 100 BC each.",
-        "!sell <instance_id>": "Sell a card for BaoCoins."
-        "!multisell <id1> <id2> ..." "Sell 2–25 cards using space-separated IDs."
     }
-},
-"gacha": {
-    "title": "🎰 Gacha Commands",
-    "description": "Roll for the ultimate Bao.",
-    "commands": {
-        "!roll": "Pull one random Bao card.",
-        "!multiroll [2-10]": "Pull up to 10 cards at once.",
-        "!mult": "Shortcut for !multiroll.",
-        "!pity": "Check your rarity guarantees."
-    }
-},
-
-
-"📖 Dictionary": [
-    ("!dictionary / !dict", "Browse the server dictionary with dropdowns and search."),
-    ("!define <term>", "Look up a server dictionary definition."),
-    ("!dictadd <term> | <definition>", "Add a new dictionary entry."),
-    ("!dictedit <term> | <definition>", "Edit an existing definition (author/moderator)."),
-    ("!dictremove <term>", "Remove an entry (author/moderator)."),
-    ("!dictrandom", "Display a random dictionary entry."),
-],
-
-
-
-
-
-
-    
 }
 
 
@@ -160,6 +176,8 @@ class HelpView(discord.ui.View):
             view=self
         )
 
+    # ROW 0
+
     @discord.ui.button(
         label="Home",
         emoji="🏠",
@@ -188,18 +206,6 @@ class HelpView(discord.ui.View):
         await self.change_category(interaction, "economy")
 
     @discord.ui.button(
-    label="Dictionary",
-    emoji="📖",
-    style=discord.ButtonStyle.primary,
-    row=1
-)
-    async def dictionary_help(self, interaction, button):
-        await interaction.response.edit_message(
-            embed=self.create_category_embed("📖 Dictionary"),
-            view=self
-        )
-
-    @discord.ui.button(
         label="Inventory",
         emoji="🃏",
         style=discord.ButtonStyle.primary,
@@ -212,10 +218,30 @@ class HelpView(discord.ui.View):
         label="Trading",
         emoji="🤝",
         style=discord.ButtonStyle.primary,
-        row=1
+        row=0
     )
     async def trading_button(self, interaction, button):
         await self.change_category(interaction, "trading")
+
+    # ROW 1
+
+    @discord.ui.button(
+        label="Dictionary",
+        emoji="📖",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def dictionary_button(self, interaction, button):
+        await self.change_category(interaction, "dictionary")
+
+    @discord.ui.button(
+        label="Casino",
+        emoji="🎲",
+        style=discord.ButtonStyle.primary,
+        row=1
+    )
+    async def casino_button(self, interaction, button):
+        await self.change_category(interaction, "casino")
 
     @discord.ui.button(
         label="Fun",
