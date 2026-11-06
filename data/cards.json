@@ -129,11 +129,112 @@
     "name": "Crazy Bao",
     "image": "files/cards/crazy_bao.jpg",
     "description": "The voices are telling him to roll again."
+  },
+  
+  {
+    "id": "suprised_bao",
+    "name": "Suprised Bao",
+    "image": "files/cards/suprised_bao.jpg",
+    "description": "Bro just found out the odds were never in his favor."
+  },
+  {
+    "id": "sukuna_bao",
+    "name": "Sukuna Bao",
+    "image": "files/cards/sukuna_bao.png",
+    "description": "Malevolent Kitchen."
+  },
+  {
+    "id": "anime_bao",
+    "name": "Anime Bao",
+    "image": "files/cards/anime_bao.jpg",
+    "description": "Bro thinks he is the main character."
+  },
+  {
+    "id": "chopped_bao",
+    "name": "Chopped Bao",
+    "image": "files/cards/chopped_bao.jpg",
+    "description": "The barber needs to be investigated."
+  },
+  {
+    "id": "instagram_bao",
+    "name": "Instagram Bao",
+    "image": "files/cards/instagram_bao.png",
+    "description": "Posted once. Checked the likes 400 times."
+  },
+  {
+    "id": "slenderman_bao",
+    "name": "Slenderman Bao",
+    "image": "files/cards/slenderman_bao.jpg",
+    "description": "Eight pages. Zero friends."
+  },
+  {
+    "id": "terrorist_bao",
+    "name": "Terrorist Bao",
+    "image": "files/cards/terrorist_bao.png",
+    "description": "Bro is on every watchlist."
+  },
+  {
+    "id": "bathroom_bao",
+    "name": "Bathroom Bao",
+    "image": "files/cards/bathroom_bao.jpg",
+    "description": "Do not disturb. Serious business."
+  },
+  {
+    "id": "swag_money_bao",
+    "name": "Swag Money Bao",
+    "image": "files/cards/swag_money_bao.jpg",
+    "description": "All that swagger and still broke."
+  },
+  {
+    "id": "elevator_bao",
+    "name": "Elevator Bao",
+    "image": "files/cards/elevator_bao.jpg",
+    "description": "His career is going nowhere but up. Allegedly."
+  },
+  {
+    "id": "side_profile_bao",
+    "name": "Side Profile Bao",
+    "image": "files/cards/side_profile_bao.jpg",
+    "description": "Caught from the forbidden angle."
+  },
+  {
+    "id": "wicked_bao",
+    "name": "Wicked Bao",
+    "image": "files/cards/wicked_bao.jpg",
+    "description": "Defying gravity. Not the allegations."
+  },
+  {
+    "id": "transformation_bao",
+    "name": "Transformation Bao",
+    "image": "files/cards/transformation_bao.gif",
+    "description": "This is not even his final form."
+  },
+  {
+    "id": "jawline_bao",
+    "name": "Jawline Bao",
+    "image": "files/cards/jawline_bao.jpg",
+    "description": "The mewing finally paid off."
+  },
+  {
+    "id": "masked_bao",
+    "name": "Masked Bao",
+    "image": "files/cards/masked_bao.jpg",
+    "description": "The mysterious man nobody asked about."
+  },
+  {
+    "id": "noodles_bao",
+    "name": "Noodles Bao",
+    "image": "files/cards/noodles_bao.jpg",
+    "description": "Fueled by instant noodles and bad decisions."
   }
 
-
-
-
-
 ]
+  
+
+
+
+
+
+
+
 
