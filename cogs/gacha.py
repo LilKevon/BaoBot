@@ -108,7 +108,7 @@ class Gacha(commands.Cog):
     
     @commands.command(
         name="multiroll",
-        aliases=["mult", "rollmulti"]
+        aliases=["multi", "rollmulti"]
     )
     @commands.guild_only()
     @commands.cooldown(
@@ -250,7 +250,7 @@ class Gacha(commands.Cog):
         await ctx.send(embed=embed)
 
     
-    @commands.command(name="multisell", aliases=["msell"])
+    @commands.command(name="multisell", aliases=["multsell", "msell"])
     @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def multisell(self, ctx, *arguments: str):
