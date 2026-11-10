@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from database import get_pity, PITY_THRESHOLDS
 from cogs.card_sale import CardSaleView
-from utils.shiny import get_card_file
+from utils.shiny import create_shiny_image
 
 
 
@@ -22,8 +22,8 @@ from database import (
     execute_multi_sale,
     get_inventory,
     get_card_instance,
-    perform_multi_roll
-
+    perform_multi_roll,
+    get_last_multiroll_instances
 )
 
 
@@ -108,7 +108,7 @@ class Gacha(commands.Cog):
     
     @commands.command(
         name="multiroll",
-        aliases=["multi", "rollmulti", "mult"]
+        aliases=["mult", "rollmulti"]
     )
     @commands.guild_only()
     @commands.cooldown(
@@ -243,40 +243,75 @@ class Gacha(commands.Cog):
         embed.set_footer(
             text=(
                 "🎯 = Pity guarantee • "
-                "Use !inventory to view your cards"
+                "Sell positions 1–7 with !multisell 1-7 • "
+                "Use !inventory to view cards"
             )
         )
 
         await ctx.send(embed=embed)
 
     
-    @commands.command(name="multisell", aliases=["multsell", "msell"])
+    @commands.command(name="multisell", aliases=["msell"])
     @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def multisell(self, ctx, *arguments: str):
         if not arguments:
             await ctx.send(
-                "❌ Usage: `!multisell 101 102 103`\n"
-                "Separate card instance IDs with spaces."
+                "❌ Usage: `!multisell 1-7` (latest multi-roll), "
+                "`!multisell last 1 3 7` (selected positions), or "
+                "`!multisell 101 102 103` (instance IDs)."
             )
             return
 
         confirmed = arguments[-1].lower() == "confirm"
+        tokens = list(arguments[:-1] if confirmed else arguments)
+        is_range = len(tokens) == 1 and "-" in tokens[0]
+        is_last = bool(tokens) and tokens[0].lower() == "last"
 
-        tokens = (
-            arguments[:-1]
-            if confirmed
-            else arguments
-        )
+        if is_range or is_last:
+            if confirmed:
+                await ctx.send(
+                    "❌ To confirm valuable cards, use the exact instance "
+                    "IDs shown in the preview. This protects you if you "
+                    "multi-roll again in the meantime."
+                )
+                return
 
-        try:
-            instance_ids = [int(x) for x in tokens]
-        except ValueError:
-            await ctx.send(
-                "❌ Use numeric card IDs separated by spaces.\n"
-                "Example: `!multisell 101 102 103`"
+            try:
+                if is_range:
+                    first_str, last_str = tokens[0].split("-", 1)
+                    first, last = int(first_str), int(last_str)
+                    if first > last or first < 1 or last > 10:
+                        raise ValueError()
+                    positions = list(range(first, last + 1))
+                else:
+                    positions = [int(x) for x in tokens[1:]]
+                    if not positions:
+                        raise ValueError()
+            except ValueError:
+                await ctx.send(
+                    "❌ Invalid positions. Try `!multisell 1-7` or "
+                    "`!multisell last 1 3 7`."
+                )
+                return
+
+            instance_ids = await asyncio.to_thread(
+                get_last_multiroll_instances, ctx.author.id, positions
             )
-            return
+            if instance_ids is None:
+                await ctx.send(
+                    "❌ Those positions aren't in your latest multi-roll. "
+                    "Use `!multiroll` first and select its numbered cards."
+                )
+                return
+        else:
+            try:
+                instance_ids = [int(x) for x in tokens]
+            except ValueError:
+                await ctx.send(
+                    "❌ Enter instance IDs or a range such as `1-7`."
+                )
+                return
 
         if not 2 <= len(instance_ids) <= 25:
             await ctx.send(
@@ -369,12 +404,23 @@ class Gacha(commands.Cog):
             await ctx.send(embed=embed)
             return
 
-        result = await asyncio.to_thread(
-            execute_multi_sale,
-            ctx.author.id,
-            instance_ids,
-            confirmed
-        )
+        try:
+            result = await asyncio.to_thread(
+                execute_multi_sale,
+                ctx.author.id,
+                instance_ids,
+                confirmed,
+                preview["total"]
+            )
+        except Exception as exc:
+            if "GALLERY_LOCKED" in str(exc):
+                await ctx.send(
+                    "🔒 One of these cards is in a gallery. Remove it "
+                    "with `!favremove <instance_id>` before selling. "
+                    "Nothing was sold."
+                )
+                return
+            raise
 
         if result["status"] != "success":
             await ctx.send(
@@ -486,7 +532,14 @@ class Gacha(commands.Cog):
 
         
         image_path = BASE_DIR / card["image"]
-        file = get_card_file(image_path, shiny)
+
+        if shiny:
+            file = create_shiny_image(image_path)
+        else:
+            file = discord.File(
+                image_path,
+                filename=image_path.name
+            )
 
         embed.set_image(
             url=f"attachment://{file.filename}"

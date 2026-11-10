@@ -24,9 +24,7 @@ SHINY_MULTIPLIER = 5
 DAILY_REWARD = 200
 WEEKLY_REWARD = 1000
 
-# Daily: midnight Eastern; weekly: Monday midnight Eastern.
-# Use a named time zone so resets follow daylight saving time,
-# regardless of the host server's local clock.
+
 REWARD_TIMEZONE = ZoneInfo("America/Toronto")
 
 
@@ -136,6 +134,15 @@ def initialize_database():
         """)
 
       
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS last_multiroll_cards (
+                user_id INTEGER NOT NULL,
+                position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 10),
+                instance_id INTEGER NOT NULL,
+                PRIMARY KEY (user_id, position)
+            )
+        """)
+
         player_columns = {
             row["name"]
             for row in conn.execute(
@@ -533,6 +540,18 @@ def perform_multi_roll(user_id, quantity, roll_factory):
             user_id
         ))
 
+        conn.execute(
+            "DELETE FROM last_multiroll_cards WHERE user_id = ?",
+            (user_id,)
+        )
+        conn.executemany("""
+            INSERT INTO last_multiroll_cards (user_id, position, instance_id)
+            VALUES (?, ?, ?)
+        """, [
+            (user_id, position, pull["instance_id"])
+            for position, pull in enumerate(results, start=1)
+        ])
+
         return {
             "status": "success",
             "results": results,
@@ -541,6 +560,25 @@ def perform_multi_roll(user_id, quantity, roll_factory):
             "pity": counters.copy()
         }
 
+
+
+def get_last_multiroll_instances(user_id, positions):
+    if not positions or len(set(positions)) != len(positions):
+        return None
+    if any(not 1 <= position <= 10 for position in positions):
+        return None
+
+    with database() as conn:
+        rows = conn.execute("""
+            SELECT position, instance_id
+            FROM last_multiroll_cards
+            WHERE user_id = ?
+        """, (user_id,)).fetchall()
+
+    by_position = {row["position"]: row["instance_id"] for row in rows}
+    if any(position not in by_position for position in positions):
+        return None
+    return [by_position[position] for position in positions]
 
 
 def buy_rolls(user_id, quantity):
