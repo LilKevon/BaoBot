@@ -108,7 +108,7 @@ class Gacha(commands.Cog):
     
     @commands.command(
         name="multiroll",
-        aliases=["mult", "rollmulti"]
+        aliases=["mult", "rollmulti", "multi"]
     )
     @commands.guild_only()
     @commands.cooldown(
@@ -534,7 +534,7 @@ class Gacha(commands.Cog):
         image_path = BASE_DIR / card["image"]
 
         if shiny:
-            file = create_shiny_image(image_path)
+            file = get_card_file(image_path)
         else:
             file = discord.File(
                 image_path,
