@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from database import get_pity, PITY_THRESHOLDS
 from cogs.card_sale import CardSaleView
-from utils.shiny import create_shiny_image
+from utils.shiny import get_card_file
 
 
 
