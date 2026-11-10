@@ -144,8 +144,8 @@ class CardSelect(discord.ui.Select):
     def refresh_options(self):
         view = self.inventory_view
 
-        # Discord allows a maximum of 25 options
-        group_start = (view.index // 25) * 25
+        
+        group_start = view.page * 25
         group_end = min(
             group_start + 25,
             len(view.instances)
@@ -235,6 +235,7 @@ class InventoryView(discord.ui.View):
         self.read_only = read_only
 
         self.index = 0
+        self.page = 0
         self.showing_overview = True
         self.message = None
 
@@ -258,6 +259,10 @@ class InventoryView(discord.ui.View):
             if self.showing_overview
             else "Overview"
         )
+        total_pages = (len(self.instances) + 24) // 25
+
+        self.previous_page_button.disabled = self.page == 0
+        self.next_page_button.disabled = self.page >= total_pages - 1
 
         self.card_select.refresh_options()
 
@@ -407,6 +412,7 @@ class InventoryView(discord.ui.View):
             0,
             min(index, len(self.instances) - 1)
         )
+        self.page = self.index // 25
 
         self.showing_overview = False
         await self.refresh_message(interaction)
@@ -464,6 +470,34 @@ class InventoryView(discord.ui.View):
             interaction,
             self.index + 1
         )
+
+    @discord.ui.button(
+    label="Previous 25",
+    emoji="⏪",
+    style=discord.ButtonStyle.secondary,
+    row=2
+)
+    async def previous_page_button(self, interaction, button):
+        self.page = max(0, self.page - 1)
+        await self.refresh_message(interaction)
+
+
+    @discord.ui.button(
+        label="Next 25",
+        emoji="⏩",
+        style=discord.ButtonStyle.secondary,
+        row=2
+    )
+    async def next_page_button(self, interaction, button):
+        total_pages = (len(self.instances) + 24) // 25
+
+        self.page = min(
+            total_pages - 1,
+            self.page + 1
+        )
+
+        await self.refresh_message(interaction)
+        
 
     async def on_timeout(self):
         for item in self.children:
