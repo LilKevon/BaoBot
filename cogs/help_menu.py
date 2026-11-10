@@ -30,6 +30,7 @@ COMMAND_CATEGORIES = {
             "!multiroll [2-10]": "Pull up to 10 cards at once.",
             "!mult": "Shortcut for !multiroll.",
             "!pity": "Check your rarity guarantees."
+            
         }
     },
 
@@ -38,15 +39,20 @@ COMMAND_CATEGORIES = {
         "description": "Earn and spend your BaoCoins.",
         "commands": {
             "!balance / !bal": "Check BaoCoins and available rolls.",
-            "!daily": "Claim 200 BC every 24 hours.",
-            "!weekly": "Claim 1,000 BC every 7 days.",
+            "!daily": "Claim 200 BC every 24 hours. Resets daily at 12:00 AM ET",
+            "!weekly": "Claim 1,000 BC every 7 days. Resets weekly on Monday at 12:00 AM ET",
             "!rewards": "View reward cooldowns.",
             "!buyroll <amount>": "Purchase rolls for 100 BC each.",
             "!sell <instance_id>": "Sell an owned card.",
             "!sell <id> confirm": "Confirm selling a valuable card.",
             "!multisell <id1> <id2> ...": (
                 "Sell 2–25 cards using space-separated IDs."
-            )
+
+            ),
+            "!multisell x-y": "Sell cards 1 through 7 from your latest multi-roll.",
+            "!multisell last x ... n": "Sell specific positions from your latest multi-roll.",
+       
+            
         }
     },
 
