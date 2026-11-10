@@ -108,7 +108,7 @@ class Gacha(commands.Cog):
     
     @commands.command(
         name="multiroll",
-        aliases=["multi", "rollmulti"]
+        aliases=["multi", "rollmulti", "mult"]
     )
     @commands.guild_only()
     @commands.cooldown(
