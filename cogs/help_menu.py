@@ -33,7 +33,7 @@ COMMAND_CATEGORIES = {
             
         }
     },
-
+#checking webhook
     "economy": {
         "title": "🪙 Economy Commands",
         "description": "Earn and spend your BaoCoins.",
