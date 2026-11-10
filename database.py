@@ -3,6 +3,8 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -22,8 +24,27 @@ SHINY_MULTIPLIER = 5
 DAILY_REWARD = 200
 WEEKLY_REWARD = 1000
 
-DAILY_COOLDOWN = 24 * 60 * 60
-WEEKLY_COOLDOWN = 7 * 24 * 60 * 60
+# Daily: midnight Eastern; weekly: Monday midnight Eastern.
+# Use a named time zone so resets follow daylight saving time,
+# regardless of the host server's local clock.
+REWARD_TIMEZONE = ZoneInfo("America/Toronto")
+
+
+def reward_window(reward_type, now):
+    """Unix timestamps for the current period start and next reset."""
+    local_now = datetime.fromtimestamp(now, REWARD_TIMEZONE)
+    midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if reward_type == "daily":
+        period_start = midnight
+        next_reset = midnight + timedelta(days=1)
+    elif reward_type == "weekly":
+        period_start = midnight - timedelta(days=midnight.weekday())
+        next_reset = period_start + timedelta(days=7)
+    else:
+        raise ValueError("Invalid reward type")
+
+    return int(period_start.timestamp()), int(next_reset.timestamp())
 
 
 SELL_VALUES = {
@@ -912,23 +933,15 @@ def execute_trade(
 
 def claim_reward(user_id, reward_type):
     rewards = {
-        "daily": (
-            DAILY_REWARD,
-            DAILY_COOLDOWN,
-            "last_daily_claim"
-        ),
-        "weekly": (
-            WEEKLY_REWARD,
-            WEEKLY_COOLDOWN,
-            "last_weekly_claim"
-        )
+        "daily": (DAILY_REWARD, "last_daily_claim"),
+        "weekly": (WEEKLY_REWARD, "last_weekly_claim"),
     }
-
     if reward_type not in rewards:
         raise ValueError("Invalid reward type")
 
-    amount, cooldown, column = rewards[reward_type]
+    amount, column = rewards[reward_type]
     now = int(time.time())
+    period_start, next_reset = reward_window(reward_type, now)
 
     with database() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -941,16 +954,12 @@ def claim_reward(user_id, reward_type):
         """, (user_id,)).fetchone()
 
         last_claim = player[column]
-        remaining = max(
-            0,
-            last_claim + cooldown - now
-        ) if last_claim else 0
-
-        if remaining > 0:
+        if last_claim and last_claim >= period_start:
             return {
                 "status": "cooldown",
-                "remaining": remaining,
-                "coins": player["bao_coins"]
+                "remaining": max(0, next_reset - now),
+                "next_claim": next_reset,
+                "coins": player["bao_coins"],
             }
 
         conn.execute(f"""
@@ -964,12 +973,14 @@ def claim_reward(user_id, reward_type):
             "status": "success",
             "reward": amount,
             "coins": player["bao_coins"] + amount,
-            "next_claim": now + cooldown
+            "next_claim": next_reset,
         }
 
 
 def get_reward_cooldowns(user_id):
     now = int(time.time())
+    daily_start, next_daily = reward_window("daily", now)
+    weekly_start, next_weekly = reward_window("weekly", now)
 
     with database() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -981,26 +992,9 @@ def get_reward_cooldowns(user_id):
             WHERE user_id = ?
         """, (user_id,)).fetchone()
 
-        def remaining(last_claim, cooldown):
-            if not last_claim:
-                return 0
-
-            return max(
-                0,
-                last_claim + cooldown - now
-            )
-
         return {
-            "daily": remaining(
-                player["last_daily_claim"],
-                DAILY_COOLDOWN
-            ),
-            "weekly": remaining(
-                player["last_weekly_claim"],
-                WEEKLY_COOLDOWN
-            )
+            "daily": max(0, next_daily - now)
+                if player["last_daily_claim"] >= daily_start else 0,
+            "weekly": max(0, next_weekly - now)
+                if player["last_weekly_claim"] >= weekly_start else 0,
         }
-
-
-
-
