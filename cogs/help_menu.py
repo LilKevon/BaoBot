@@ -51,7 +51,7 @@ COMMAND_CATEGORIES = {
             ),
             "!multisell x-y": "Sell cards 1 through 7 from your latest multi-roll.",
             "!multisell last x ... n": "Sell specific positions from your latest multi-roll.",
-       
+            "!sellall <rarity>": "Sell all cards of a specific rarity.",
             
         }
     },

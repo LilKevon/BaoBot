@@ -23,7 +23,9 @@ from database import (
     get_inventory,
     get_card_instance,
     perform_multi_roll,
-    get_last_multiroll_instances
+    get_last_multiroll_instances,
+    preview_sellall,
+    confirm_sellall
 )
 
 
@@ -447,6 +449,75 @@ class Gacha(commands.Cog):
 
 
 
+    @commands.command(name="sellall", aliases=["sell_all"])
+    @commands.guild_only()
+    @commands.cooldown(1, 3, commands.BucketType.user)
+    async def sellall(self, ctx, *arguments: str):
+        """Sell non-shiny Common-Epic cards, excluding gallery favourites."""
+        valid = {"common", "uncommon", "rare", "epic"}
+        confirmed = bool(arguments) and arguments[-1].lower() == "confirm"
+        rarities = tuple(sorted(set(
+            arg.lower() for arg in (arguments[:-1] if confirmed else arguments)
+        )))
+        if not rarities or any(r not in valid for r in rarities):
+            await ctx.send(
+                "❌ Usage: `!sellall common` or `!sellall common uncommon`\n"
+                "Then run the same command with `confirm` at the end.\n"
+                "Only Common, Uncommon, Rare, and Epic are supported. "
+                "Shinies and gallery cards are excluded."
+            )
+            return
+
+        result = await asyncio.to_thread(
+            confirm_sellall if confirmed else preview_sellall,
+            ctx.author.id, rarities
+        )
+        if result["status"] == "empty":
+            await ctx.send("🥟 No eligible cards found for those rarities.")
+            return
+        if result["status"] == "expired":
+            await ctx.send("⏳ Your preview expired (5 minutes). Run `!sellall` again without `confirm`.")
+            return
+        if result["status"] == "mismatch":
+            await ctx.send("❌ Rarities don't match your preview. Confirm using the exact same rarity list.")
+            return
+        if result["status"] == "changed":
+            await ctx.send(
+                "⚠️ Your eligible cards changed since the preview. Nothing was sold. "
+                "Run `!sellall` again to review the updated selection."
+            )
+            return
+        if result["status"] == "success":
+            await ctx.send(
+                f"✅ Sold **{result['count']:,} cards** for "
+                f"**{result['total']:,} BaoCoins**! 🥟"
+            )
+            return
+
+        lines = [
+            f"{rarity.title()}: **{count:,}** × "
+            f"**{ {'common': 10, 'uncommon': 20, 'rare': 40, 'epic': 100}[rarity]:,} BC**"
+            for rarity, count in result["breakdown"].items() if count
+        ]
+        command = "!sellall " + " ".join(rarities) + " confirm"
+        embed = discord.Embed(
+            title="🪙 BaoBot Sell-All Preview",
+            description="\n".join(lines),
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Cards to sell", value=f"{result['count']:,}", inline=True)
+        embed.add_field(name="Total payout", value=f"**{result['total']:,} BC**", inline=True)
+        embed.add_field(
+            name="✅ Confirm within 5 minutes",
+            value=f"`{command}`",
+            inline=False
+        )
+        embed.set_footer(
+            text="Shinies, gallery favourites, and Legendary+ cards are never included."
+        )
+        await ctx.send(embed=embed)
+
+
     @commands.command(name="roll")
     @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
@@ -533,13 +604,7 @@ class Gacha(commands.Cog):
         
         image_path = BASE_DIR / card["image"]
 
-        if shiny:
-            file = get_card_file(image_path)
-        else:
-            file = discord.File(
-                image_path,
-                filename=image_path.name
-            )
+        file = get_card_file(image_path, shiny)
 
         embed.set_image(
             url=f"attachment://{file.filename}"
@@ -557,10 +622,10 @@ class Gacha(commands.Cog):
             )
 
         sale_view.message = await ctx.send(
-    file=file,
-    embed=embed,
-    view=sale_view
-)
+            file=file,
+            embed=embed,
+            view=sale_view
+        )
 
     
     # @commands.command(name="collection", aliases=["cards"])

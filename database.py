@@ -1,5 +1,6 @@
 
 import os
+import json
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -24,7 +25,9 @@ SHINY_MULTIPLIER = 5
 DAILY_REWARD = 200
 WEEKLY_REWARD = 1000
 
-
+# Daily: midnight Eastern; weekly: Monday midnight Eastern.
+# Use a named time zone so resets follow daylight saving time,
+# regardless of the host server's local clock.
 REWARD_TIMEZONE = ZoneInfo("America/Toronto")
 
 
@@ -134,12 +137,25 @@ def initialize_database():
         """)
 
       
+        # Positions in each player's most recent successful multi-roll.
+        # Stored in SQLite so an Altare restart does not invalidate the list.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS last_multiroll_cards (
                 user_id INTEGER NOT NULL,
                 position INTEGER NOT NULL CHECK (position BETWEEN 1 AND 10),
                 instance_id INTEGER NOT NULL,
                 PRIMARY KEY (user_id, position)
+            )
+        """)
+
+        # Stored previews make !sellall ... confirm sell exactly what was previewed.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_sellall (
+                user_id INTEGER PRIMARY KEY,
+                rarities TEXT NOT NULL,
+                instance_ids TEXT NOT NULL,
+                expected_total INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
             )
         """)
 
@@ -540,6 +556,8 @@ def perform_multi_roll(user_id, quantity, roll_factory):
             user_id
         ))
 
+        # Update the recent multi-roll together with the awarded cards.
+        # A failed roll rolls back both the cards and this mapping.
         conn.execute(
             "DELETE FROM last_multiroll_cards WHERE user_id = ?",
             (user_id,)
@@ -563,6 +581,11 @@ def perform_multi_roll(user_id, quantity, roll_factory):
 
 
 def get_last_multiroll_instances(user_id, positions):
+    """Resolve 1-based positions from this user's latest multi-roll.
+
+    Returns an ordered list of actual card instance IDs, or None if the
+    latest roll is missing / any requested position is invalid.
+    """
     if not positions or len(set(positions)) != len(positions):
         return None
     if any(not 1 <= position <= 10 for position in positions):
@@ -672,6 +695,125 @@ def sell_card(user_id, instance_id, confirmed=False):
             "shiny": shiny,
             "value": value
         }
+
+
+
+SELLALL_RARITIES = ("common", "uncommon", "rare", "epic")
+SELLALL_PREVIEW_SECONDS = 300
+
+
+def _normalize_sellall_rarities(rarities):
+    chosen = tuple(sorted(set(rarities)))
+    if not chosen or any(r not in SELLALL_RARITIES for r in chosen):
+        raise ValueError("Only common, uncommon, rare and epic are supported")
+    return chosen
+
+
+def _sellall_candidates(conn, user_id, rarities):
+    """Current eligible cards. Gallery is optional; protect it when installed."""
+    placeholders = ",".join("?" for _ in rarities)
+    gallery_exists = conn.execute("""
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'table' AND name = 'favourite_cards'
+    """).fetchone() is not None
+    gallery_filter = ("""
+        AND NOT EXISTS (
+            SELECT 1 FROM favourite_cards AS fav
+            WHERE fav.user_id = player_cards.user_id
+              AND fav.instance_id = player_cards.instance_id
+        )
+    """ if gallery_exists else "")
+
+    rows = conn.execute(f"""
+        SELECT instance_id, rarity
+        FROM player_cards
+        WHERE user_id = ? AND is_shiny = 0
+          AND rarity IN ({placeholders})
+          {gallery_filter}
+        ORDER BY instance_id
+    """, (user_id, *rarities)).fetchall()
+    ids = [row["instance_id"] for row in rows]
+    breakdown = {rarity: 0 for rarity in rarities}
+    for row in rows:
+        breakdown[row["rarity"]] += 1
+    total = sum(SELL_VALUES[rarity] * count for rarity, count in breakdown.items())
+    return ids, breakdown, total
+
+
+def preview_sellall(user_id, rarities):
+    """Record one five-minute preview for this user in the database."""
+    rarities = _normalize_sellall_rarities(rarities)
+    now = int(time.time())
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        ids, breakdown, total = _sellall_candidates(conn, user_id, rarities)
+        if not ids:
+            conn.execute("DELETE FROM pending_sellall WHERE user_id = ?", (user_id,))
+            return {"status": "empty"}
+        conn.execute("""
+            INSERT INTO pending_sellall (
+                user_id, rarities, instance_ids, expected_total, created_at
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                rarities = excluded.rarities,
+                instance_ids = excluded.instance_ids,
+                expected_total = excluded.expected_total,
+                created_at = excluded.created_at
+        """, (user_id, json.dumps(rarities), json.dumps(ids), total, now))
+        return {
+            "status": "preview", "count": len(ids), "total": total,
+            "breakdown": breakdown, "expires_at": now + SELLALL_PREVIEW_SECONDS
+        }
+
+
+def confirm_sellall(user_id, rarities):
+    """All-or-nothing sale of the exact eligible card set previously previewed."""
+    rarities = _normalize_sellall_rarities(rarities)
+    now = int(time.time())
+    with database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        pending = conn.execute("""
+            SELECT rarities, instance_ids, expected_total, created_at
+            FROM pending_sellall WHERE user_id = ?
+        """, (user_id,)).fetchone()
+        if not pending or now > pending["created_at"] + SELLALL_PREVIEW_SECONDS:
+            conn.execute("DELETE FROM pending_sellall WHERE user_id = ?", (user_id,))
+            return {"status": "expired"}
+        if tuple(json.loads(pending["rarities"])) != rarities:
+            return {"status": "mismatch"}
+
+        ids, _, total = _sellall_candidates(conn, user_id, rarities)
+        # Abort if new cards appeared, a trade/sale occurred, or gallery locks changed.
+        if ids != json.loads(pending["instance_ids"]) or total != pending["expected_total"]:
+            conn.execute("DELETE FROM pending_sellall WHERE user_id = ?", (user_id,))
+            return {"status": "changed"}
+
+        # Current selection is identical to preview. Reapply conditions in SQL.
+        placeholders = ",".join("?" for _ in rarities)
+        gallery_exists = conn.execute("""
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'favourite_cards'
+        """).fetchone() is not None
+        gallery_filter = ("""
+            AND NOT EXISTS (
+                SELECT 1 FROM favourite_cards AS fav
+                WHERE fav.user_id = player_cards.user_id
+                  AND fav.instance_id = player_cards.instance_id
+            )
+        """ if gallery_exists else "")
+        deleted = conn.execute(f"""
+            DELETE FROM player_cards
+            WHERE user_id = ? AND is_shiny = 0
+              AND rarity IN ({placeholders})
+              {gallery_filter}
+        """, (user_id, *rarities)).rowcount
+        if deleted != len(ids):
+            raise RuntimeError("Bulk sale count changed; transaction rolled back")
+        conn.execute("""
+            UPDATE players SET bao_coins = bao_coins + ? WHERE user_id = ?
+        """, (total, user_id))
+        conn.execute("DELETE FROM pending_sellall WHERE user_id = ?", (user_id,))
+        return {"status": "success", "count": deleted, "total": total}
 
 
 def _prepare_multi_sale(conn, user_id, instance_ids):
