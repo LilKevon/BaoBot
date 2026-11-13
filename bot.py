@@ -425,8 +425,18 @@ async def sound(ctx):
         print("Voice connected:", vc.is_connected(), flush=True)
         print("Playback started:", vc.is_playing(), flush=True)
 
+        playback_start = time.monotonic()
+
         while vc.is_playing():
             await asyncio.sleep(0.2)
+
+        elapsed = time.monotonic() - playback_start
+
+        print(f"Playback duration: {elapsed:.2f}s", flush=True)
+        print("Voice still connected:", vc.is_connected(), flush=True)
+
+        # Keep the connection open after playback
+        await asyncio.sleep(5)
 
     except Exception as e:
         print(f"Voice error: {e}")
