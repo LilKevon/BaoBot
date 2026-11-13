@@ -253,68 +253,106 @@ class Gacha(commands.Cog):
         await ctx.send(embed=embed)
 
     
-    @commands.command(name="multisell", aliases=["msell"])
+    @commands.command(name="multisell", aliases=["msell", "multsell"])
     @commands.guild_only()
     @commands.cooldown(1, 2, commands.BucketType.user)
     async def multisell(self, ctx, *arguments: str):
         if not arguments:
             await ctx.send(
-                "❌ Usage: `!multisell 1-7` (latest multi-roll), "
-                "`!multisell last 1 3 7` (selected positions), or "
-                "`!multisell 101 102 103` (instance IDs)."
+                "🥟 **Multi-Sell Usage**\n"
+                "`!multisell 1-3 5-7` — Sell positions 1-3 and 5-7\n"
+                "`!multisell 2 4-6` — Sell position 2 and 4-6\n"
+                "`!multisell last 1 3 7` — Sell specific positions\n"
+                "`!multisell 101 102 103` — Sell by instance IDs"
             )
             return
 
         confirmed = arguments[-1].lower() == "confirm"
         tokens = list(arguments[:-1] if confirmed else arguments)
-        is_range = len(tokens) == 1 and "-" in tokens[0]
+
         is_last = bool(tokens) and tokens[0].lower() == "last"
 
-        if is_range or is_last:
+  
+        is_positions = is_last or any("-" in token for token in tokens)
+
+        if is_positions:
             if confirmed:
                 await ctx.send(
-                    "❌ To confirm valuable cards, use the exact instance "
-                    "IDs shown in the preview. This protects you if you "
-                    "multi-roll again in the meantime."
+                    "❌ Confirm valuable cards using the exact "
+                    "instance IDs shown in the preview."
                 )
                 return
 
+            selections = tokens[1:] if is_last else tokens
+
             try:
-                if is_range:
-                    first_str, last_str = tokens[0].split("-", 1)
-                    first, last = int(first_str), int(last_str)
-                    if first > last or first < 1 or last > 10:
-                        raise ValueError()
-                    positions = list(range(first, last + 1))
-                else:
-                    positions = [int(x) for x in tokens[1:]]
-                    if not positions:
-                        raise ValueError()
+                if not selections:
+                    raise ValueError()
+
+                positions = []
+
+                for token in selections:
+                    if "-" in token:
+                        if token.count("-") != 1:
+                            raise ValueError()
+
+                        start_text, end_text = token.split("-", 1)
+
+                        start = int(start_text)
+                        end = int(end_text)
+
+                        if not 1 <= start <= end <= 10:
+                            raise ValueError()
+
+                        positions.extend(range(start, end + 1))
+
+                    else:
+                        position = int(token)
+
+                        if not 1 <= position <= 10:
+                            raise ValueError()
+
+                        positions.append(position)
+
+                # Prevent selling the same position twice
+                if len(positions) != len(set(positions)):
+                    await ctx.send(
+                        "❌ Duplicate positions selected. "
+                        "Check for overlapping ranges."
+                    )
+                    return
+
             except ValueError:
                 await ctx.send(
-                    "❌ Invalid positions. Try `!multisell 1-7` or "
-                    "`!multisell last 1 3 7`."
+                    "❌ Invalid positions.\n"
+                    "Examples: `!multisell 1-3 5-7` "
+                    "or `!multisell 2 4-6`."
                 )
                 return
 
             instance_ids = await asyncio.to_thread(
-                get_last_multiroll_instances, ctx.author.id, positions
+                get_last_multiroll_instances,
+                ctx.author.id,
+                positions
             )
+
             if instance_ids is None:
                 await ctx.send(
-                    "❌ Those positions aren't in your latest multi-roll. "
-                    "Use `!multiroll` first and select its numbered cards."
-                )
-                return
-        else:
-            try:
-                instance_ids = [int(x) for x in tokens]
-            except ValueError:
-                await ctx.send(
-                    "❌ Enter instance IDs or a range such as `1-7`."
+                    "❌ Those positions aren't available "
+                    "in your latest multi-roll."
                 )
                 return
 
+        else:
+            # Existing instance-ID selling
+            try:
+                instance_ids = [int(x) for x in tokens]
+
+            except ValueError:
+                await ctx.send(
+                    "❌ Enter valid instance IDs or ranges."
+                )
+                return
         if not 2 <= len(instance_ids) <= 25:
             await ctx.send(
                 "❌ Select between 2 and 25 cards."
