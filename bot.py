@@ -388,10 +388,27 @@ async def sound(ctx):
         
         print("FFmpeg:", shutil.which("ffmpeg"), flush=True)
         print("Opus loaded:", discord.opus.is_loaded(), flush=True)
-        source = discord.FFmpegPCMAudio(str(sound_path))
-        vc.play(source)
 
-     
+        print("Sound path:", sound_path, flush=True)
+        print("Sound exists:", sound_path.is_file(), flush=True)
+        print("Sound size:", sound_path.stat().st_size, flush=True)
+
+        source = discord.FFmpegPCMAudio(
+            str(sound_path),
+            stderr=sys.stderr
+        )
+
+        def after_playback(error):
+            if error:
+                print(f"❌ Playback error: {error!r}", flush=True)
+            else:
+                print("✅ Playback completed", flush=True)
+
+        vc.play(source, after=after_playback)
+
+        print("Voice connected:", vc.is_connected(), flush=True)
+        print("Playback started:", vc.is_playing(), flush=True)
+
         while vc.is_playing():
             await asyncio.sleep(0.2)
 
