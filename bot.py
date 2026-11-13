@@ -393,10 +393,11 @@ async def sound(ctx):
         print("Sound exists:", sound_path.is_file(), flush=True)
         print("Sound size:", sound_path.stat().st_size, flush=True)
 
-        source = discord.FFmpegPCMAudio(
-            str(sound_path),
-            stderr=sys.stderr
-        )
+        source = await discord.FFmpegOpusAudio.from_probe(
+    str(sound_path),
+    method="fallback",
+    stderr=sys.stderr
+)
 
         def after_playback(error):
             if error:
