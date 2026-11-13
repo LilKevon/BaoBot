@@ -45,7 +45,8 @@ class Rewards(commands.Cog):
                 f"⏳ You've already claimed your "
                 f"**{reward_type}** reward!\n"
                 f"Come back in "
-                f"**{format_duration(result['remaining'])}**."
+                f"**{format_duration(result['remaining'])}** "
+                f"(<t:{result['next_claim']}:F>)."
             )
             return
 
@@ -109,7 +110,11 @@ class Rewards(commands.Cog):
 
         embed = discord.Embed(
             title="🥟 BaoBot Rewards",
-            description="Your available claim rewards",
+            description=(
+                "Your available claim rewards\n"
+                "Daily resets at **12:00 AM ET**; "
+                "weekly resets **Monday at 12:00 AM ET**."
+            ),
             color=discord.Color.blurple()
         )
 

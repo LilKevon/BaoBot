@@ -1,0 +1,7 @@
+# BaoBot — direct Python dependencies
+# discord.py[voice] includes PyNaCl for Discord voice connections.
+discord.py[voice]>=2.6,<3
+python-dotenv>=1.1,<2
+Pillow>=12,<13
+# Used by BaoBot's runtime/resource monitoring, if enabled.
+psutil>=7,<8

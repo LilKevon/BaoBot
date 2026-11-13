@@ -12,28 +12,34 @@ from database import DB_PATH
 logger = logging.getLogger(__name__)
 
 MIN_BET = 10
-MAX_BET = 1000000000
-SPIN_COOLDOWN = 10
+MAX_BET = 2000
+SPIN_COOLDOWN = 1
 
-SYMBOLS = ["<:bao1:1568193348223762504>", 
-           "<:bao2:1568193349184393238>",
-           "<:bao3:1568193350098493460>",
-           "<:bao4:1568193351029755925>",
-           "<:bao5:1568193359657570435>",
-           "<:bao6:1568193360814940271>",
-           "<:bao7:1568193361897062461>",
-           "<:bao8:1568193362991779940>",
+# 50% loss, 48% pair, 2% triple
+LOSS_CHANCE = 50
+PAIR_CHANCE = 48
+TRIPLE_CHANCE = 2
+
+SYMBOLS = [
+    "<:bao1:1568193348223762504>",
+    "<:bao2:1568193349184393238>",
+    "<:bao3:1568193350098493460>",
+    "<:bao4:1568193351029755925>",
+    "<:bao5:1568193359657570435>",
+    "<:bao6:1568193360814940271>",
+    "<:bao7:1568193361897062461>",
+    "<:bao8:1568193362991779940>",
 ]
-           
 
 TRIPLE_MULTIPLIERS = {
-    SYMBOLS[0]: 10,
-    SYMBOLS[1]: 7,
-    SYMBOLS[2]: 5,
+    SYMBOLS[0]: 7,
+    SYMBOLS[1]: 5,
+    SYMBOLS[2]: 4,
     SYMBOLS[3]: 3,
     SYMBOLS[4]: 3,
     SYMBOLS[5]: 3,
-    SYMBOLS[6]  : 3,
+    SYMBOLS[6]: 3,
+    SYMBOLS[7]: 3,
 }
 
 
@@ -44,7 +50,7 @@ def get_connection():
 
 
 def initialize_slots():
-    """Create the slot history table if needed."""
+    """Create slot history table if needed."""
     conn = get_connection()
 
     try:
@@ -71,36 +77,82 @@ def initialize_slots():
         conn.close()
 
 
-def calculate_multiplier(reels):
-    """Return the payout multiplier for three symbols."""
+def generate_reels():
+    """
+    Generate an outcome with controlled probabilities.
 
-    # Three matching symbols
+    50%: Three different symbols
+    48%: Exactly two matching symbols
+     2%: Three matching symbols
+    """
+    outcome = secrets.randbelow(100)
+
+    if outcome < LOSS_CHANCE:
+        # Three different symbols: loss.
+        return secrets.SystemRandom().sample(
+            SYMBOLS, 3
+        )
+
+    if outcome < LOSS_CHANCE + PAIR_CHANCE:
+        # Exactly two matching symbols.
+        matching = secrets.choice(SYMBOLS)
+
+        alternatives = [
+            symbol for symbol in SYMBOLS
+            if symbol != matching
+        ]
+
+        different = secrets.choice(alternatives)
+
+        reels = [matching, matching, different]
+        secrets.SystemRandom().shuffle(reels)
+
+        return reels
+
+    # Three matching symbols: jackpot.
+    symbol = secrets.choice(SYMBOLS)
+    return [symbol, symbol, symbol]
+
+
+def calculate_multiplier(reels):
+    """Return the total payout multiplier."""
+
+    # Three matching symbols.
     if reels[0] == reels[1] == reels[2]:
         return TRIPLE_MULTIPLIERS[reels[0]]
 
-    # Exactly two matching symbols
+    # Exactly two matching symbols.
     if len(set(reels)) == 2:
-        return 2
+        return 1.5
 
-    # No matching symbols
+    # No matching symbols.
     return 0
 
 
 def spin_slots(user_id, wager):
     """
     Atomically:
-    1. Verify and deduct the wager.
-    2. Generate the slot result.
-    3. Credit any winnings.
-    4. Save the spin history.
+    1. Verify and deduct wager.
+    2. Generate slot result.
+    3. Credit winnings.
+    4. Save spin history.
     """
+
+    if (
+        wager < MIN_BET
+        or wager > MAX_BET
+        or wager % 10 != 0
+    ):
+        raise ValueError(
+            "Wager must be a multiple of 10 "
+            "within the permitted limits."
+        )
 
     conn = get_connection()
 
     try:
         conn.execute("BEGIN IMMEDIATE")
 
-        # Deduct only if the player has enough BC.
         result = conn.execute("""
             UPDATE players
             SET bao_coins = bao_coins - ?
@@ -112,17 +164,15 @@ def spin_slots(user_id, wager):
             conn.rollback()
             return None
 
-        # Generate three independent symbols.
-        reels = [
-            secrets.choice(SYMBOLS)
-            for _ in range(3)
-        ]
+        # Generate the final reels.
+        reels = generate_reels()
 
+        # Calculate the reward.
         multiplier = calculate_multiplier(reels)
-        payout = wager * multiplier
 
-        # Credit total winnings, including the wager
-        # where applicable.
+        # Multiples of 10 ensure integer payouts.
+        payout = int(wager * multiplier)
+
         conn.execute("""
             UPDATE players
             SET bao_coins = bao_coins + ?
@@ -171,7 +221,7 @@ def spin_slots(user_id, wager):
 
 
 def get_slot_stats(user_id):
-    """Retrieve a player's lifetime slot statistics."""
+    """Retrieve lifetime slot statistics."""
 
     conn = get_connection()
 
@@ -208,10 +258,15 @@ class BaoSlots(commands.Cog):
         commands.BucketType.user
     )
     async def slots(self, ctx, bet: int):
-        if bet < MIN_BET or bet > MAX_BET:
+        if (
+            bet < MIN_BET
+            or bet > MAX_BET
+            or bet % 10 != 0
+        ):
             await ctx.send(
-                f"❌ Bets must be between "
-                f"{MIN_BET} and {MAX_BET} BaoCoins."
+                f"❌ Bets must be multiples of 10 "
+                f"between {MIN_BET:,} and "
+                f"{MAX_BET:,} BaoCoins."
             )
             return
 
@@ -240,7 +295,7 @@ class BaoSlots(commands.Cog):
             outcome = "OH MY DAYS..."
             color = discord.Color.gold()
 
-        elif multiplier == 2:
+        elif multiplier == 1.5:
             outcome = "✨ LUCKY AF!"
             color = discord.Color.green()
 
@@ -265,7 +320,7 @@ class BaoSlots(commands.Cog):
 
         embed.add_field(
             name="Multiplier",
-            value=f"{multiplier}x",
+            value=f"{multiplier:g}x",
             inline=True
         )
 

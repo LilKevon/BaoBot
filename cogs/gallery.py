@@ -3,7 +3,7 @@ import logging
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-
+from utils.shiny import get_card_file
 import discord
 from discord.ext import commands
 
@@ -175,9 +175,15 @@ def build_embed(member, cards, index, catalogue):
         logger.warning("Invalid or missing gallery image for card %s: %s", selected["card_id"], image)
         return embed, None
 
-    attachment = discord.File(path, filename=path.name)
-    embed.set_image(url=f"attachment://{path.name}")
+    
+    attachment = get_card_file(path, shiny)
+
+    embed.set_image(
+        url=f"attachment://{attachment.filename}"
+    )
+
     return embed, attachment
+
 
 
 class GalleryView(discord.ui.View):

@@ -3,14 +3,27 @@ import os
 import re
 import random
 import math
+import shutil
 import time
 from pathlib import Path
 import difflib
 import logging
 import sys
 import asyncio
-
+import shutil
+import subprocess
+from unittest import result
 import discord
+
+import ctypes.util
+
+opus_path = ctypes.util.find_library("opus")
+print("Opus library found:", opus_path, flush=True)
+
+if opus_path:
+    discord.opus.load_opus(opus_path)
+
+print("Opus loaded:", discord.opus.is_loaded(), flush=True)
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -373,13 +386,57 @@ async def sound(ctx):
 
     try:
         vc = await channel.connect()
+        
+        print("FFmpeg:", shutil.which("ffmpeg"), flush=True)
+        print("Opus loaded:", discord.opus.is_loaded(), flush=True)
 
-        source = discord.FFmpegPCMAudio(str(sound_path))
-        vc.play(source)
+        print("Sound path:", sound_path, flush=True)
+        print("Sound exists:", sound_path.is_file(), flush=True)
+        print("Sound size:", sound_path.stat().st_size, flush=True)
 
-     
+        result = subprocess.run(
+    [
+        "ffmpeg",
+        "-hide_banner",
+        "-i", str(sound_path),
+        "-af", "volumedetect",
+        "-f", "null", "-"
+    ],
+            capture_output=True,
+            text=True
+        )
+
+        print("FFmpeg exit code:", result.returncode, flush=True)
+        print("Volume analysis:", result.stderr, flush=True)
+        source = await discord.FFmpegOpusAudio.from_probe(
+    str(sound_path),
+    method="fallback",
+    stderr=sys.stderr
+)   
+
+        def after_playback(error):
+            if error:
+                print(f"❌ Playback error: {error!r}", flush=True)
+            else:
+                print("✅ Playback completed", flush=True)
+
+        vc.play(source, after=after_playback)
+
+        print("Voice connected:", vc.is_connected(), flush=True)
+        print("Playback started:", vc.is_playing(), flush=True)
+
+        playback_start = time.monotonic()
+
         while vc.is_playing():
             await asyncio.sleep(0.2)
+
+        elapsed = time.monotonic() - playback_start
+
+        print(f"Playback duration: {elapsed:.2f}s", flush=True)
+        print("Voice still connected:", vc.is_connected(), flush=True)
+
+        # Keep the connection open after playback
+        await asyncio.sleep(5)
 
     except Exception as e:
         print(f"Voice error: {e}")
