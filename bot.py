@@ -11,7 +11,7 @@ import logging
 import sys
 import asyncio
 import shutil
-
+import subprocess
 import discord
 
 import ctypes.util
@@ -397,7 +397,7 @@ async def sound(ctx):
     str(sound_path),
     method="fallback",
     stderr=sys.stderr
-)
+)   
 
         def after_playback(error):
             if error:
