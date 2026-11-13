@@ -3,12 +3,14 @@ import os
 import re
 import random
 import math
+import shutil
 import time
 from pathlib import Path
 import difflib
 import logging
 import sys
 import asyncio
+import shutil
 
 import discord
 from pathlib import Path
@@ -373,7 +375,9 @@ async def sound(ctx):
 
     try:
         vc = await channel.connect()
-
+        
+        print("FFmpeg:", shutil.which("ffmpeg"), flush=True)
+        print("Opus loaded:", discord.opus.is_loaded(), flush=True)
         source = discord.FFmpegPCMAudio(str(sound_path))
         vc.play(source)
 
