@@ -13,6 +13,16 @@ import asyncio
 import shutil
 
 import discord
+
+import ctypes.util
+
+opus_path = ctypes.util.find_library("opus")
+print("Opus library found:", opus_path, flush=True)
+
+if opus_path:
+    discord.opus.load_opus(opus_path)
+
+print("Opus loaded:", discord.opus.is_loaded(), flush=True)
 from pathlib import Path
 
 from dotenv import load_dotenv
