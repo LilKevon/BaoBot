@@ -12,6 +12,7 @@ import sys
 import asyncio
 import shutil
 import subprocess
+from unittest import result
 import discord
 
 import ctypes.util
@@ -393,6 +394,20 @@ async def sound(ctx):
         print("Sound exists:", sound_path.is_file(), flush=True)
         print("Sound size:", sound_path.stat().st_size, flush=True)
 
+        result = subprocess.run(
+    [
+        "ffmpeg",
+        "-hide_banner",
+        "-i", str(sound_path),
+        "-af", "volumedetect",
+        "-f", "null", "-"
+    ],
+            capture_output=True,
+            text=True
+        )
+
+        print("FFmpeg exit code:", result.returncode, flush=True)
+        print("Volume analysis:", result.stderr, flush=True)
         source = await discord.FFmpegOpusAudio.from_probe(
     str(sound_path),
     method="fallback",
