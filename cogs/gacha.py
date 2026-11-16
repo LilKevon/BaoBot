@@ -6,7 +6,8 @@ from pathlib import Path
 from database import get_pity, PITY_THRESHOLDS
 from cogs.card_sale import CardSaleView
 from utils.shiny import get_card_file
-
+from combat.stats import calculate_stats
+from utils.card_stats_view import CardStatsButton
 
 
 import discord
@@ -605,12 +606,16 @@ class Gacha(commands.Cog):
         image_path = BASE_DIR / card["image"]
 
         sale_view = CardSaleView(
-            owner_id=ctx.author.id,
-            instance_id=instance_id,
-            card_name=card["name"],
-            rarity=rarity,
-            shiny=shiny
-        )
+    owner_id=ctx.author.id,
+    instance_id=instance_id,
+    card_id=card["id"],
+    card_name=card["name"],
+    rarity=rarity,
+    shiny=shiny,
+    image_path=image_path
+
+    
+)
         
 
 

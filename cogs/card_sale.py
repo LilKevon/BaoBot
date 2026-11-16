@@ -4,30 +4,38 @@ import sqlite3
 
 import discord
 
+
 from database import (
     sell_card,
     SELL_VALUES,
     SHINY_MULTIPLIER
 )
+from utils.card_stats_view import CardStatsButton
 
 
 class CardSaleView(discord.ui.View):
     def __init__(
-        self,
-        owner_id: int,
-        instance_id: int,
-        card_name: str,
-        rarity: str,
-        shiny: bool
-    ):
+    self,
+    owner_id,
+    instance_id,
+    card_id,
+    card_name,
+    rarity,
+    shiny,
+    image_path
+):
         super().__init__(timeout=180)
 
         self.owner_id = owner_id
         self.instance_id = instance_id
+        self.card_id = card_id
         self.card_name = card_name
         self.rarity = rarity
         self.shiny = shiny
-
+        self.image_path = image_path
+        self.showing_stats = False
+        self.original_embed = None
+        
         self.value = (
             SELL_VALUES[rarity]
             * (SHINY_MULTIPLIER if shiny else 1)
@@ -41,6 +49,16 @@ class CardSaleView(discord.ui.View):
 
         self.confirm_button.disabled = True
         self.cancel_button.disabled = True
+
+        self.add_item(
+        CardStatsButton(
+            card_id=self.card_id,
+            card_name=self.card_name,
+            rarity=self.rarity,
+            instance_id=self.instance_id,
+            row=1
+        )
+    )
 
     async def interaction_check(
         self,
@@ -179,21 +197,6 @@ class CardSaleView(discord.ui.View):
             )
 
 
-            
-            if result["status"] == "not_found":
-                self.closed = True
-                self.confirming = False
-                self.update_buttons()
-
-                await interaction.message.edit(
-                    content=(
-                        "❌ This card is no longer in "
-                        "your inventory. No sale occurred."
-                    ),
-                    view=self
-                )
-                self.stop()
-                return
 
             await interaction.followup.send(
                 f"⚠️ Sale failed: {result['status']}",
