@@ -38,7 +38,7 @@ from cogs.inventory import (
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CARDS_FILE = BASE_DIR / "data" / "cards.json"
+CARDS_FILE = BASE_DIR / "data" / "stats.json"
 
 
 RARITY_WEIGHTS = {
